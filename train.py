@@ -13,8 +13,8 @@ if not os.path.exists(cfg.OUTPUT_DIR):
     os.makedirs(cfg.OUTPUT_DIR)
 
 
-agent = DQNAgent(state_size, action_size)
-# agent.load(cfg.OUTPUT_DIR + '/endrun.hdf5')
+agent = DQNAgent(state_size, action_size, epsilon=0.01)
+# agent.load(cfg.OUTPUT_DIR + '/best.hdf5')
 
 for episode in range(cfg.N_EPISODES):
 
@@ -23,8 +23,8 @@ for episode in range(cfg.N_EPISODES):
     step = 0
     done = False
 
-    while not done and step < 1000:
-        # env.render()
+    while not done and step < cfg.MAX_STEPS:
+        env.render()
         action = agent.act(state)
         next_state, reward, done, info = env.step(action)
         reward = reward if not done else -100

@@ -5,18 +5,19 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 from keras.regularizers import l1_l2, l2
+import memory as mem
 import config as cfg
 
 
 class DQNAgent:
 
-    def __init__(self, state_shape, action_shape, gamma=cfg.GAMMA, learning_rate=cfg.LEARNING_RATE,
+    def __init__(self, state_shape, action_shape, model=None, gamma=cfg.GAMMA, learning_rate=cfg.LEARNING_RATE,
                  epsilon=cfg.EPSILON, epsilon_decay=cfg.EPSILON_DECAY, epsilon_min=cfg.EPSILON_MIN,
                  memory_size=cfg.MEMORY_SIZE, min_memories=cfg.MIN_MEMORIES):
         self.state_shape = state_shape
         self.action_shape = action_shape
 
-        self.memory = deque(maxlen=memory_size)
+        self.memory = mem.Memory(size_long=memory_size)
         self.gamma = gamma
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
@@ -24,7 +25,11 @@ class DQNAgent:
         self.learning_rate = learning_rate
         self.min_memories = min_memories
 
-        self.model = self._build_model()
+        if model is None:
+            self.model = self._build_model()
+        else:
+            self.model = model
+            self.model.compile(loss='mse', optimizer=Adam(self.learning_rate))
 
     def _build_model(self):
         model = Sequential()
@@ -55,17 +60,17 @@ class DQNAgent:
         :param done: whether the episode has ended
         :return:
         """
-        self.memory.append((state, action, reward, next_state, done))
+        self.memory.commit_stmemory({'state': state, 'action': action, 'reward': reward,
+                                     'next_state': next_state, 'q_value': None, 'done': done})
 
     def act(self, state):
         """
-
         :param state: current state
         :return: the best action according to current policy
         """
         if np.random.rand() <= self.epsilon:
             return np.random.randint(self.action_shape)
-        qvals = self.model.predict(state)
+        qvals = self.model.predict(state.reshape(1, *state.shape))
         return np.argmax(qvals)
 
     def replay(self, batch_size):
@@ -74,16 +79,25 @@ class DQNAgent:
         :param batch_size:
         :return:
         """
+        q_value = -100
+        for fragment in reversed(self.memory.last_episode()):
+            if fragment['done']:
+                q_value = fragment['reward']
+                fragment['q_value'] = q_value
+            else:
+                q_value += self.gamma * fragment['reward']
+                fragment['q_value'] = q_value
+            print(q_value)
+
+        self.memory.commit_ltmemory()
+
         if len(self.memory) > self.min_memories:
-            minibatch = sample(self.memory, batch_size)
+            minibatch = self.memory.sample(batch_size)
 
-            for state, action, reward, next_state, done in minibatch:
-                target = reward
-                if not done:
-                    # estimate future rewards as
-                    # reward + (discount rate gamma) * (maximum target Q based on future action a')
-                    target += self.gamma * np.amax(self.model.predict(next_state)[0])
-
+            for fragment in minibatch:
+                target = fragment['q_value']
+                action = fragment['action']
+                state = fragment['state']
                 target_f = self.model.predict(state)
                 target_f[0][action] = target
 
