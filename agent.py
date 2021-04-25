@@ -1,7 +1,8 @@
 import numpy as np
 from random import sample
 from collections import deque
-from keras.models import Sequential
+from keras import Input
+from keras.models import Model
 from keras.layers import Dense
 from keras.optimizers import Adam
 from keras.regularizers import l1_l2, l2
@@ -32,20 +33,21 @@ class DQNAgent:
             self.model.compile(loss='mse', optimizer=Adam(self.learning_rate))
 
     def _build_model(self):
-        model = Sequential()
 
-        model.add(Dense(64, activation='relu', input_dim=self.state_shape,
-                        kernel_regularizer=l1_l2(l1=1e-5, l2=1e-4),
-                        bias_regularizer=l2(1e-4)))
-        model.add(Dense(32, activation='relu',
-                        kernel_regularizer=l1_l2(l1=1e-5, l2=1e-4),
-                        bias_regularizer=l2(1e-4)))
-        model.add(Dense(16, activation='relu',
-                        kernel_regularizer=l1_l2(l1=1e-5, l2=1e-4),
-                        bias_regularizer=l2(1e-4)))
-        # output layer, linear because the output is
-        model.add(Dense(self.action_shape, activation='linear'))
+        inputs = Input(shape=self.state_shape)
+        x = Dense(16, activation='relu',
+                  kernel_regularizer=l1_l2(l1=1e-5, l2=1e-4),
+                  bias_regularizer=l2(1e-4))(inputs)
+        x = Dense(32, activation='relu',
+                  kernel_regularizer=l1_l2(l1=1e-5, l2=1e-4),
+                  bias_regularizer=l2(1e-4))(x)
+        x = Dense(16, activation='relu',
+                  kernel_regularizer=l1_l2(l1=1e-5, l2=1e-4),
+                  bias_regularizer=l2(1e-4))(x)
+        # output layer, linear because the output are qvals
+        outputs = Dense(self.action_shape, activation='linear')(x)
 
+        model = Model(inputs=inputs, outputs=outputs)
         model.compile(loss='mse', optimizer=Adam(self.learning_rate))
 
         return model
@@ -87,7 +89,6 @@ class DQNAgent:
             else:
                 q_value += self.gamma * fragment['reward']
                 fragment['q_value'] = q_value
-            print(q_value)
 
         self.memory.commit_ltmemory()
 
@@ -98,7 +99,10 @@ class DQNAgent:
                 target = fragment['q_value']
                 action = fragment['action']
                 state = fragment['state']
-                target_f = self.model.predict(state)
+                # adding batch size dimension to state
+                # TODO: perform this operation in batch
+                state = state.reshape(1, *state.shape)
+                target_f = self.model.predict(state).reshape(1, self.action_shape)
                 target_f[0][action] = target
 
                 self.model.fit(state, target_f, epochs=1, verbose=0)
