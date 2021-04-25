@@ -1,4 +1,6 @@
 import os
+from collections import deque
+
 import numpy as np
 import gym
 import config as cfg
@@ -15,6 +17,7 @@ if not os.path.exists(cfg.OUTPUT_DIR):
 
 agent = DQNAgent(state_size, action_size, epsilon=1.0)
 # agent.load(cfg.OUTPUT_DIR + '/best.hdf5')
+scores = deque(maxlen=100)
 
 for episode in range(cfg.N_EPISODES):
 
@@ -33,12 +36,13 @@ for episode in range(cfg.N_EPISODES):
         state = next_state
 
         if done:
-            print(f'EPISODE: {episode:4d}/{cfg.N_EPISODES:4d}, SCORE: {step:4d}, EPS: {agent.epsilon}')
+            scores.append(step)
+            print(f'EPISODE: {episode:4d}/{cfg.N_EPISODES:4d}, SCORE: {np.mean(scores):3.0f}, EPS: {agent.epsilon:.2f}')
         step += 1
 
     agent.replay(cfg.BATCH_SIZE)
 
-    if (episode % 1000) == 0:
+    if (episode % 500) == 0:
         agent.save(cfg.OUTPUT_DIR + f"/ep{episode}.hdf5")
 
 agent.save(cfg.OUTPUT_DIR + "endrun.hdf5")
