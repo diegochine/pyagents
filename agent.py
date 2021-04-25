@@ -87,7 +87,7 @@ class DQNAgent:
                 q_value = fragment['reward']
                 fragment['q_value'] = q_value
             else:
-                q_value += self.gamma * fragment['reward']
+                q_value = fragment['reward'] + self.gamma * q_value
                 fragment['q_value'] = q_value
 
         self.memory.commit_ltmemory()
