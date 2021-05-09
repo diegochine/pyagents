@@ -26,11 +26,9 @@ class EncodingNetwork(Network):
         x = Dense(32, activation='relu',
                   kernel_regularizer=l1_l2(l1=1e-5, l2=1e-4),
                   bias_regularizer=l2(1e-4))(x)
-        x = Dense(16, activation='relu',
-                  kernel_regularizer=l1_l2(l1=1e-5, l2=1e-4),
-                  bias_regularizer=l2(1e-4))(x)
-        # output layer, linear because the output are qvals
-        outputs = Dense(self.action_shape, activation='linear')(x)
+        outputs = Dense(16, activation='relu',
+                        kernel_regularizer=l1_l2(l1=1e-5, l2=1e-4),
+                        bias_regularizer=l2(1e-4))(x)
 
         model = Model(inputs=inputs, outputs=outputs)
         model.compile(loss='mse', optimizer=Adam(self.learning_rate))
