@@ -1,5 +1,6 @@
 import gin
 import numpy as np
+import tensorflow as tf
 from keras import Input
 from keras.models import Model
 from keras.layers import Dense
@@ -8,13 +9,49 @@ from keras.regularizers import l1_l2, l2
 
 from agents.agent import Agent
 from memory import Memory
+from networks import network
 import config as cfg
 
 
 @gin.configurable
 class DQNAgent(Agent):
 
-    def __init__(self, state_shape, action_shape, q_network, optimizer, gamma, epsilon):
+    def __init__(self,
+                 state_shape: np.ndarray,
+                 action_shape: np.ndarray,
+                 q_network: network,
+                 optimizer: tf.keras.optimizers.Optimizer,
+                 gamma: float,
+                 epsilon: float,
+                 memory_size: int):
+        super(DQNAgent, self).__init__(state_shape, action_shape)
+        self._memory = Memory(size_long=memory_size)
+        self._gamma = gamma
+        self._epsilon = epsilon
+        self._q_network = q_network
+        self._target_q_network = self._q_network.copy()
+
+    def act(self, state):
+        pass
+
+    def remember(self, state, action, reward, next_state, done):
+        """
+        Saves piece of memory
+        :param state: state at current timestep
+        :param action: action at current timestep
+        :param reward: reward at current timestep
+        :param next_state: state at next timestep
+        :param done: whether the episode has ended
+        :return:
+        """
+        self.memory.commit_stmemory({'state': state, 'action': action, 'reward': reward,
+                                     'next_state': next_state, 'q_value': None, 'done': done})
+
+    def _loss(self, memories):
+        pass
+
+    def _train(self, memories):
+        # TODO implement training
         pass
 
 
@@ -25,7 +62,7 @@ class DQNAgentv1(Agent):
                  memory_size=cfg.MEMORY_SIZE, min_memories=cfg.MIN_MEMORIES):
 
         super(DQNAgent, self).__init__(state_shape, action_shape)
-        self.memory = Memory(size_long=memory_size)
+
         self.gamma = gamma
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
@@ -59,18 +96,7 @@ class DQNAgentv1(Agent):
 
         return model
 
-    def remember(self, state, action, reward, next_state, done):
-        """
-        Saves piece of memory
-        :param state: state at current timestep
-        :param action: action at current timestep
-        :param reward: reward at current timestep
-        :param next_state: state at next timestep
-        :param done: whether the episode has ended
-        :return:
-        """
-        self.memory.commit_stmemory({'state': state, 'action': action, 'reward': reward,
-                                     'next_state': next_state, 'q_value': None, 'done': done})
+
 
     def act(self, state):
         """

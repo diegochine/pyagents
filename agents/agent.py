@@ -26,6 +26,10 @@ class Agent(tf.Module, abc.ABC):
     def initialize(self):
         pass
 
+    @abc.abstractmethod
+    def act(self, state):
+        """Returns the best action in the state according to current policy"""
+
     def _loss(self, memories):
         """Computes loss"""
         raise NotImplementedError("Loss not implemented.")
