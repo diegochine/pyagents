@@ -6,33 +6,39 @@ from keras.models import Model
 from keras.layers import Dense
 from keras.optimizers import Adam
 from keras.regularizers import l1_l2, l2
+from keras.losses import Huber
 
 from agents.agent import Agent
 from memory import Memory
 from networks import network
 import config as cfg
-
+from copy import deepcopy
 
 @gin.configurable
 class DQNAgent(Agent):
 
     def __init__(self,
-                 state_shape: np.ndarray,
-                 action_shape: np.ndarray,
+                 state_shape: tuple,
+                 action_shape: tuple,
                  q_network: network,
                  optimizer: tf.keras.optimizers.Optimizer,
-                 gamma: float,
-                 epsilon: float,
-                 memory_size: int):
+                 gamma: float = 0.7,
+                 epsilon: float = 0.01,
+                 memory_size: int = 10000):
         super(DQNAgent, self).__init__(state_shape, action_shape)
         self._memory = Memory(size_long=memory_size)
         self._gamma = gamma
         self._epsilon = epsilon
         self._q_network = q_network
-        self._target_q_network = self._q_network.copy()
+        self._target_q_network = deepcopy(self._q_network)
+        self._optimizer = optimizer
+        self._td_errors_loss_fn = Huber(reduction=tf.keras.losses.Reduction.NONE)
 
     def act(self, state):
-        pass
+        if np.random.rand() <= self._epsilon:
+            return np.random.randint(self._action_shape)
+        qvals = self._q_network(state.reshape(1, *state.shape))
+        return np.argmax(qvals)
 
     def remember(self, state, action, reward, next_state, done):
         """
@@ -44,16 +50,36 @@ class DQNAgent(Agent):
         :param done: whether the episode has ended
         :return:
         """
-        self.memory.commit_stmemory({'state': state, 'action': action, 'reward': reward,
-                                     'next_state': next_state, 'q_value': None, 'done': done})
+        self._memory.commit_stmemory({'state': state, 'action': action, 'reward': reward,
+                                     'next_state': next_state, 'done': done})
 
     def _loss(self, memories):
-        pass
+        losses = []
+        for experience in memories:
+            q_values = self._q_network(experience['state'])
+            if not experience['done']:
+                next_q_values = self._target_q_network(experience['next_state'])
+                td_targets = tf.stop_gradient(experience['reward'] + self._gamma * next_q_values)
+            else:
+                td_targets = experience['reward']
+            td_loss = self._td_errors_loss_fn(td_targets, q_values)
+            losses.append(td_loss)
+        return tf.reduce_mean(losses)
 
-    def _train(self, memories):
-        # TODO implement training
-        pass
+    def _train(self, batch_size):
+        self._memory.commit_ltmemory()
+        if len(self._memory) > 128:
+            memories = self._memory.sample(batch_size)
+            with tf.GradientTape() as tape:
+                loss = self._loss(memories)
+            variables_to_train = self._q_network.trainable_weights
+            grads = tape.gradient(loss, variables_to_train)
+            grads_and_vars = list(zip(grads, variables_to_train))
+            self._optimizer.apply_gradients(grads_and_vars)
+            return loss
 
+    # TODO update target network
+    # TODO save and load agent
 
 class DQNAgentv1(Agent):
 

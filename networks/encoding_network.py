@@ -6,7 +6,7 @@ from keras.activations import relu
 from keras.regularizers import l2, l1_l2
 from keras.optimizers import Adam
 from keras.models import Model
-from networks import Network
+from networks.network import Network
 
 
 @gin.configurable

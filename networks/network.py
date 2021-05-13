@@ -1,10 +1,11 @@
 import abc
 from abc import ABC
 
+import keras
 import tensorflow as tf
 
 
-class Network(tf.keras.models.Model, ABC):
+class Network(tf.keras.layers.Layer, ABC):
 
     def __init__(self, name):
         super(Network, self).__init__(name=name)

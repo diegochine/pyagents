@@ -35,9 +35,8 @@ class Agent(tf.Module, abc.ABC):
         raise NotImplementedError("Loss not implemented.")
 
     @abc.abstractmethod
-    def _train(self, memories):
+    def _train(self, batch_size):
         pass
 
-    def train(self):
-        pass
-
+    def train(self, batch_size):
+        return self._train(batch_size)
