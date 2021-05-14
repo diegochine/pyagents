@@ -26,7 +26,7 @@ class DQNAgent(Agent):
                  epsilon: float = 0.1,
                  epsilon_decay: float = 0.98,
                  epsilon_min: float = 0.01,
-                 target_update_period: int = 10,
+                 target_update_period: int = 500,
                  memory_size: int = 10000):
         super(DQNAgent, self).__init__(state_shape, action_shape)
         self._memory = Memory(size_long=memory_size)
