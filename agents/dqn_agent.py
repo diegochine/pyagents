@@ -22,7 +22,7 @@ class DQNAgent(Agent):
                  action_shape: tuple,
                  q_network: Network,
                  optimizer: tf.keras.optimizers.Optimizer,
-                 gamma: float = 0.7,
+                 gamma: float = 0.5,
                  epsilon: float = 0.1,
                  epsilon_decay: float = 0.98,
                  epsilon_min: float = 0.01,
@@ -40,7 +40,6 @@ class DQNAgent(Agent):
         self._optimizer = optimizer
         self._td_errors_loss_fn = Huber(reduction=tf.keras.losses.Reduction.NONE)
         self._train_step = tf.Variable(0, trainable=False, name="train step counter")
-
 
     def act(self, state):
         if np.random.rand() <= self._epsilon:
@@ -64,10 +63,10 @@ class DQNAgent(Agent):
     def _loss(self, memories):
         losses = []
         for experience in memories:
-            q_values = self._q_network(experience['state'])
+            q_values = self._q_network(experience['state'])[:, experience['action']]
             if not experience['done']:
                 next_q_values = self._target_q_network(experience['next_state'])
-                td_targets = tf.stop_gradient(experience['reward'] + self._gamma * next_q_values)
+                td_targets = tf.stop_gradient(experience['reward'] + self._gamma * tf.math.reduce_max(next_q_values, axis=1))
             else:
                 td_targets = experience['reward']
             td_loss = self._td_errors_loss_fn(td_targets, q_values)
