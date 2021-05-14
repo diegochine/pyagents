@@ -10,7 +10,7 @@ from keras.losses import Huber
 
 from agents.agent import Agent
 from memory import Memory
-from networks import network
+from networks import Network
 import config as cfg
 from copy import deepcopy
 
@@ -20,19 +20,27 @@ class DQNAgent(Agent):
     def __init__(self,
                  state_shape: tuple,
                  action_shape: tuple,
-                 q_network: network,
+                 q_network: Network,
                  optimizer: tf.keras.optimizers.Optimizer,
                  gamma: float = 0.7,
-                 epsilon: float = 0.01,
+                 epsilon: float = 0.1,
+                 epsilon_decay: float = 0.98,
+                 epsilon_min: float = 0.01,
+                 target_update_period: int = 10,
                  memory_size: int = 10000):
         super(DQNAgent, self).__init__(state_shape, action_shape)
         self._memory = Memory(size_long=memory_size)
         self._gamma = gamma
         self._epsilon = epsilon
+        self._epsilon_decay = epsilon_decay
+        self._epsilon_min = epsilon_min
         self._q_network = q_network
         self._target_q_network = deepcopy(self._q_network)
+        self._target_update_period = target_update_period
         self._optimizer = optimizer
         self._td_errors_loss_fn = Huber(reduction=tf.keras.losses.Reduction.NONE)
+        self._train_step = tf.Variable(0, trainable=False, name="train step counter")
+
 
     def act(self, state):
         if np.random.rand() <= self._epsilon:
@@ -76,9 +84,18 @@ class DQNAgent(Agent):
             grads = tape.gradient(loss, variables_to_train)
             grads_and_vars = list(zip(grads, variables_to_train))
             self._optimizer.apply_gradients(grads_and_vars)
+            self._train_step.assign_add(1)
+            if tf.math.mod(self._train_step, self._target_update_period) == 0:
+                self._update_target()
+            self._epsilon = max(self._epsilon_min, self._epsilon * self._epsilon_decay)
             return loss
 
-    # TODO update target network
+    def _update_target(self):
+        source_variables = self._q_network.variables
+        target_variables = self._target_q_network.variables
+        for (sv, tv) in zip(source_variables, target_variables):
+            tv.assign(sv)
+
     # TODO save and load agent
 
 class DQNAgentv1(Agent):

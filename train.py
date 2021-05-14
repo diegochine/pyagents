@@ -4,7 +4,7 @@ import numpy as np
 import gym
 import config as cfg
 from agents import DQNAgent
-from networks.qnetwork import QNetwork
+from networks import QNetwork
 from keras.optimizers import Adam
 
 
@@ -17,7 +17,8 @@ if not os.path.exists(cfg.OUTPUT_DIR):
     os.makedirs(cfg.OUTPUT_DIR)
 
 q_net = QNetwork(state_size, action_size, fc_layer_params=(32, 32, 32))
-player = DQNAgent(state_size, action_size, q_network=q_net, optimizer=Adam(learning_rate=0.01))
+player = DQNAgent(state_size, action_size, q_network=q_net, optimizer=Adam(learning_rate=0.01),
+                  epsilon=1.0)
 scores = deque(maxlen=100)
 
 for episode in range(cfg.N_EPISODES):
