@@ -41,6 +41,18 @@ class DQNAgent(Agent):
         self._td_errors_loss_fn = Huber(reduction=tf.keras.losses.Reduction.NONE)
         self._train_step = tf.Variable(0, trainable=False, name="train step counter")
 
+    @property
+    def memory_len(self):
+        return len(self._memory)
+
+    @property
+    def state_shape(self):
+        return self._state_shape
+
+    @property
+    def epsilon(self):
+        return self._epsilon
+
     def act(self, state):
         if np.random.rand() <= self._epsilon:
             return np.random.randint(self._action_shape)
@@ -57,43 +69,56 @@ class DQNAgent(Agent):
         :param done: whether the episode has ended
         :return:
         """
-        self._memory.commit_stmemory({'state': state, 'action': action, 'reward': reward,
-                                     'next_state': next_state, 'done': done})
+        self._memory.commit_stmemory([state, action, reward, next_state, done])
 
     def _loss(self, memories):
         losses = []
-        for experience in memories:
-            q_values = self._q_network(experience['state'])[:, experience['action']]
-            if not experience['done']:
-                next_q_values = self._target_q_network(experience['next_state'])
-                td_targets = tf.stop_gradient(experience['reward'] + self._gamma * tf.math.reduce_max(next_q_values, axis=1))
+        state_batch, action_batch, reward_batch, new_state_batch, done_batch = memories
+
+        next_q_values = self._target_q_network(new_state_batch)
+        q_values = self._q_network(state_batch)
+
+        for i, (a, r, new_state_q_values, done) in enumerate(
+                zip(action_batch, reward_batch, next_q_values, done_batch)):
+            if not done:
+                target_value = tf.stop_gradient(r + self._gamma * tf.math.reduce_max(new_state_q_values, axis=1))
             else:
-                td_targets = experience['reward']
-            td_loss = self._td_errors_loss_fn(td_targets, q_values)
+                target_value = r
+            target_q_values = q_values.copy()
+            target_q_values[i][a] = target_value
+            td_loss = self._td_errors_loss_fn(q_values, target_q_values)
             losses.append(td_loss)
         return tf.reduce_mean(losses)
 
     def _train(self, batch_size):
         self._memory.commit_ltmemory()
-        if len(self._memory) > 128:
-            memories = self._memory.sample(batch_size)
-            with tf.GradientTape() as tape:
-                loss = self._loss(memories)
-            variables_to_train = self._q_network.trainable_weights
-            grads = tape.gradient(loss, variables_to_train)
-            grads_and_vars = list(zip(grads, variables_to_train))
-            self._optimizer.apply_gradients(grads_and_vars)
-            self._train_step.assign_add(1)
-            if tf.math.mod(self._train_step, self._target_update_period) == 0:
-                self._update_target()
-            self._epsilon = max(self._epsilon_min, self._epsilon * self._epsilon_decay)
-            return loss
+        memories = self._memory.sample(batch_size, vectorizing_fn=self._vectorize_samples)
+        with tf.GradientTape() as tape:
+            loss = self._loss(memories)
+        variables_to_train = self._q_network.trainable_weights
+        grads = tape.gradient(loss, variables_to_train)
+        grads_and_vars = list(zip(grads, variables_to_train))
+        self._optimizer.apply_gradients(grads_and_vars)
+        self._train_step.assign_add(1)
+        if tf.math.mod(self._train_step, self._target_update_period) == 0:
+            self._update_target()
+        self._epsilon = max(self._epsilon_min, self._epsilon * self._epsilon_decay)
+        return loss
 
     def _update_target(self):
         source_variables = self._q_network.variables
         target_variables = self._target_q_network.variables
         for (sv, tv) in zip(source_variables, target_variables):
             tv.assign(sv)
+
+    def _vectorize_samples(self, mini_batch):
+        state_batch = np.array([sample[0] for sample in mini_batch])
+        action_batch = np.array([sample[1] for sample in mini_batch])
+        reward_batch = np.array([sample[2] for sample in mini_batch])
+        new_state_batch = np.array([sample[3] for sample in mini_batch])
+        done_batch = np.array([sample[4] for sample in mini_batch])
+
+        return [state_batch, action_batch, reward_batch, new_state_batch, done_batch]
 
     # TODO save and load agent
 

@@ -55,8 +55,8 @@ class Memory:
     def clear_stmemory(self):
         self.stmemory.clear()
 
-    def sample(self, batch_size=cfg.BATCH_SIZE):
-        return random.sample(list(self.ltmemory), batch_size)
+    def sample(self, batch_size=cfg.BATCH_SIZE, vectorizing_fn=lambda x: x):
+        return vectorizing_fn(random.sample(list(self.ltmemory), batch_size))
 
     def save(self, name):
         pickle.dump(self.ltmemory, open('memories/mem{}.pkl'.format(name), 'wb'))
