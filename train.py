@@ -18,21 +18,24 @@ def memory_init(e, agent, episode_max_steps):
             new_state, r, end, _ = e.step(a)
             agent.remember(s, a, r, new_state, end)
             s = new_state
-            if len(agent.memory_len) >= cfg.MIN_MEMORIES:
+            print(f'{agent.memory_len}')
+            if agent.memory_len >= cfg.MIN_MEMORIES:
                 return
 
 
 env = gym.make('CartPole-v0')
-state_size = (1, env.observation_space.shape[0])
+state_size = env.observation_space.shape[0]
 action_size = env.action_space.n
 
 
 if not os.path.exists(cfg.OUTPUT_DIR):
     os.makedirs(cfg.OUTPUT_DIR)
 
-q_net = QNetwork(state_size, action_size, fc_layer_params=(32, 32, 32))
-player = DQNAgent(state_size, action_size, q_network=q_net, optimizer=Adam(learning_rate=0.01), epsilon=1.0)
+q_net = QNetwork(state_size, action_size, fc_layer_params=(32, 32))
+player = DQNAgent(state_size, action_size, q_network=q_net, optimizer=Adam(learning_rate=0.003),
+                  epsilon=1.0, epsilon_decay=0.998, target_update_period=25)
 scores = deque(maxlen=100)
+print('memory init')
 memory_init(env, player, cfg.MAX_STEPS)
 
 for episode in range(cfg.N_EPISODES):

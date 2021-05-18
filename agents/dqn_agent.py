@@ -6,13 +6,14 @@ from keras.models import Model
 from keras.layers import Dense
 from keras.optimizers import Adam
 from keras.regularizers import l1_l2, l2
-from keras.losses import Huber
+from keras.losses import Huber, mean_squared_error
 
 from agents.agent import Agent
 from memory import Memory
 from networks import Network
 import config as cfg
 from copy import deepcopy
+
 
 @gin.configurable
 class DQNAgent(Agent):
@@ -38,12 +39,12 @@ class DQNAgent(Agent):
         self._target_q_network = deepcopy(self._q_network)
         self._target_update_period = target_update_period
         self._optimizer = optimizer
-        self._td_errors_loss_fn = Huber(reduction=tf.keras.losses.Reduction.NONE)
+        self._td_errors_loss_fn = mean_squared_error  # Huber(reduction=tf.keras.losses.Reduction.NONE)
         self._train_step = tf.Variable(0, trainable=False, name="train step counter")
 
     @property
     def memory_len(self):
-        return len(self._memory)
+        return len(self._memory.stmemory)
 
     @property
     def state_shape(self):
@@ -78,17 +79,13 @@ class DQNAgent(Agent):
         next_q_values = self._target_q_network(new_state_batch)
         q_values = self._q_network(state_batch)
 
-        for i, (a, r, new_state_q_values, done) in enumerate(
-                zip(action_batch, reward_batch, next_q_values, done_batch)):
-            if not done:
-                target_value = tf.stop_gradient(r + self._gamma * tf.math.reduce_max(new_state_q_values, axis=1))
-            else:
-                target_value = r
-            target_q_values = q_values.copy()
-            target_q_values[i][a] = target_value
-            td_loss = self._td_errors_loss_fn(q_values, target_q_values)
-            losses.append(td_loss)
-        return tf.reduce_mean(losses)
+        target_values = tf.where(done_batch, reward_batch,
+                                 tf.stop_gradient(reward_batch + self._gamma * tf.math.reduce_max(next_q_values, axis=1)))
+        target_values = tf.stack([target_values for _ in range(self._action_shape)], axis=1)
+        update_idx = tf.convert_to_tensor([[i == a for i in range(self._action_shape)] for a in action_batch])
+        target_q_values = tf.where(update_idx, target_values, q_values)
+        td_loss = self._td_errors_loss_fn(q_values, target_q_values)
+        return tf.reduce_mean(td_loss)
 
     def _train(self, batch_size):
         self._memory.commit_ltmemory()
@@ -112,15 +109,17 @@ class DQNAgent(Agent):
             tv.assign(sv)
 
     def _vectorize_samples(self, mini_batch):
-        state_batch = np.array([sample[0] for sample in mini_batch])
-        action_batch = np.array([sample[1] for sample in mini_batch])
-        reward_batch = np.array([sample[2] for sample in mini_batch])
-        new_state_batch = np.array([sample[3] for sample in mini_batch])
+        state_batch = tf.convert_to_tensor([sample[0].reshape(self.state_shape)
+                                            for sample in mini_batch])
+        action_batch = tf.convert_to_tensor([sample[1] for sample in mini_batch])
+        reward_batch = tf.convert_to_tensor([sample[2] for sample in mini_batch])
+        new_state_batch = tf.convert_to_tensor([sample[3].reshape(self.state_shape)
+                                                for sample in mini_batch])
         done_batch = np.array([sample[4] for sample in mini_batch])
-
         return [state_batch, action_batch, reward_batch, new_state_batch, done_batch]
 
     # TODO save and load agent
+
 
 class DQNAgentv1(Agent):
 
@@ -162,8 +161,6 @@ class DQNAgentv1(Agent):
         model.compile(loss='mse', optimizer=Adam(self.learning_rate))
 
         return model
-
-
 
     def act(self, state):
         """
