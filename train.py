@@ -2,50 +2,39 @@ import os
 from collections import deque
 import numpy as np
 import gym
-import config as cfg
 from agents import DQNAgent
 from networks import QNetwork
 from keras.optimizers import Adam
+import gin
 
 
-def memory_init(e, agent, episode_max_steps):
-    while True:
-        s = e.reset()
-        end = False
-        step_count = 0
-        while (step_count < episode_max_steps) and (not end):
-            a = e.action_space.sample()
-            new_state, r, end, _ = e.step(a)
-            agent.remember(s, a, r, new_state, end)
-            s = new_state
-            print(f'{agent.memory_len}')
-            if agent.memory_len >= cfg.MIN_MEMORIES:
-                return
-
+OUTPUT_DIR = './output'
+BATCH_SIZE = 64
+N_EPISODES = 9001
+MAX_STEPS = 1000
+MIN_MEMORIES = 500
 
 env = gym.make('CartPole-v0')
 state_size = env.observation_space.shape[0]
 action_size = env.action_space.n
 
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
 
-if not os.path.exists(cfg.OUTPUT_DIR):
-    os.makedirs(cfg.OUTPUT_DIR)
-
-q_net = QNetwork(state_size, action_size, fc_layer_params=(32, 32))
-player = DQNAgent(state_size, action_size, q_network=q_net, optimizer=Adam(learning_rate=0.003),
-                  epsilon=1.0, epsilon_decay=0.998, target_update_period=25)
+gin.parse_config_file('config/cartpole_v0.gin')
+q_net = QNetwork(state_size, action_size)
+player = DQNAgent(state_size, action_size, q_network=q_net, optimizer=Adam(learning_rate=0.003))
 scores = deque(maxlen=100)
-print('memory init')
-memory_init(env, player, cfg.MAX_STEPS)
+player.memory_init(env, MAX_STEPS, MIN_MEMORIES)
 
-for episode in range(cfg.N_EPISODES):
+for episode in range(N_EPISODES):
 
     state = env.reset()
     state = np.reshape(state, player.state_shape)
     step = 0
     done = False
 
-    while not done and step < cfg.MAX_STEPS:
+    while not done and step < MAX_STEPS:
         env.render()
         action = player.act(state)
         next_state, reward, done, info = env.step(action)
@@ -56,12 +45,10 @@ for episode in range(cfg.N_EPISODES):
 
         if done:
             scores.append(step)
-            print(f'EPISODE: {episode:4d}/{cfg.N_EPISODES:4d}, SCORE: {np.mean(scores):3.0f}, EPS: {player.epsilon:.2f}')
+            print(f'EPISODE: {episode:4d}/{N_EPISODES:4d}, SCORE: {np.mean(scores):3.0f}, EPS: {player.epsilon:.2f}')
         step += 1
 
-    player.train(cfg.BATCH_SIZE)
+    player.train(BATCH_SIZE)
 
-    #if (episode % 500) == 0:
-    #    player.save(cfg.OUTPUT_DIR + f"/ep{episode}.hdf5")
-
-#player.save(cfg.OUTPUT_DIR + "endrun.hdf5")
+    if (episode % 500) == 0:
+        pass # TODO player.save()

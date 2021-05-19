@@ -2,6 +2,10 @@ import abc
 import tensorflow as tf
 
 
+def load_agent(path, name):
+    pass  # TODO
+
+
 class Agent(tf.Module, abc.ABC):
     """Abstract base class for all implemented agents.
     The agent serves two purposes:
@@ -40,3 +44,7 @@ class Agent(tf.Module, abc.ABC):
 
     def train(self, batch_size):
         return self._train(batch_size)
+
+    #@abc.abstractmethod
+    #def save(self, path):
+    #    pass

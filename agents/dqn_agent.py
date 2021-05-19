@@ -1,17 +1,11 @@
 import gin
 import numpy as np
 import tensorflow as tf
-from keras import Input
-from keras.models import Model
-from keras.layers import Dense
-from keras.optimizers import Adam
-from keras.regularizers import l1_l2, l2
 from keras.losses import Huber, mean_squared_error
 
 from agents.agent import Agent
 from memory import Memory
 from networks import Network
-import config as cfg
 from copy import deepcopy
 
 
@@ -118,7 +112,17 @@ class DQNAgent(Agent):
         done_batch = np.array([sample[4] for sample in mini_batch])
         return [state_batch, action_batch, reward_batch, new_state_batch, done_batch]
 
-    # TODO save and load agent
+    def memory_init(self, env, max_steps, min_memories):
+        while self.memory_len <= min_memories:
+            s = env.reset()
+            done = False
+            step = 0
+            while not done and step < max_steps:
+                a = env.action_space.sample()
+                new_state, r, done, _ = env.step(a)
+                self.remember(s, a, r, new_state, done)
+                s = new_state
+                step += 1
 
     def save(self, path, name='DQNAgent', v=1):
         # TODO

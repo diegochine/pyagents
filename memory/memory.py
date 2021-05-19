@@ -3,7 +3,7 @@ import random
 from collections import deque
 import pickle
 
-import config as cfg
+import gin
 
 
 def load_memories(path='./memories/'):
@@ -25,9 +25,10 @@ def compact_memories(path='./memories/'):
     pickle.dump(memories, open(path + 'dataset.pkl', 'wb'))
 
 
+@gin.configurable
 class Memory:
 
-    def __init__(self, size_short=cfg.MAX_STEPS, size_long=cfg.MEMORY_SIZE, ltmemory=None):
+    def __init__(self, size_short=5000, size_long=10000, ltmemory=None):
         if ltmemory is not None:
             self.ltmemory = ltmemory
         else:
@@ -55,7 +56,7 @@ class Memory:
     def clear_stmemory(self):
         self.stmemory.clear()
 
-    def sample(self, batch_size=cfg.BATCH_SIZE, vectorizing_fn=lambda x: x):
+    def sample(self, batch_size, vectorizing_fn=lambda x: x):
         return vectorizing_fn(random.sample(list(self.ltmemory), batch_size))
 
     def save(self, name):
