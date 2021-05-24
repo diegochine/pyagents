@@ -6,6 +6,7 @@ from keras.losses import Huber, mean_squared_error
 from agents.agent import Agent
 from memory import Memory
 from networks import Network
+from policies import QPolicy, EpsGreedyPolicy
 from copy import deepcopy
 
 
@@ -26,15 +27,15 @@ class DQNAgent(Agent):
         super(DQNAgent, self).__init__(state_shape, action_shape)
         self._memory = Memory(size_long=memory_size)
         self._gamma = gamma
-        self._epsilon = epsilon
-        self._epsilon_decay = epsilon_decay
-        self._epsilon_min = epsilon_min
         self._q_network = q_network
         self._target_q_network = deepcopy(self._q_network)
         self._target_update_period = target_update_period
         self._optimizer = optimizer
         self._td_errors_loss_fn = mean_squared_error  # Huber(reduction=tf.keras.losses.Reduction.NONE)
         self._train_step = tf.Variable(0, trainable=False, name="train step counter")
+
+        policy = QPolicy(self._state_shape, self._action_shape, self._q_network)
+        self._policy = EpsGreedyPolicy(policy, epsilon, epsilon_decay, epsilon_min)
 
     @property
     def memory_len(self):
@@ -46,13 +47,10 @@ class DQNAgent(Agent):
 
     @property
     def epsilon(self):
-        return self._epsilon
+        return self._policy.epsilon
 
     def act(self, state):
-        if np.random.rand() <= self._epsilon:
-            return np.random.randint(self._action_shape)
-        qvals = self._q_network(state.reshape(1, *state.shape))
-        return np.argmax(qvals)
+        return self._policy.act(state)
 
     def remember(self, state, action, reward, next_state, done):
         """
@@ -67,7 +65,6 @@ class DQNAgent(Agent):
         self._memory.commit_stmemory([state, action, reward, next_state, done])
 
     def _loss(self, memories):
-        losses = []
         state_batch, action_batch, reward_batch, new_state_batch, done_batch = memories
 
         next_q_values = self._target_q_network(new_state_batch)
@@ -93,7 +90,9 @@ class DQNAgent(Agent):
         self._train_step.assign_add(1)
         if tf.math.mod(self._train_step, self._target_update_period) == 0:
             self._update_target()
-        self._epsilon = max(self._epsilon_min, self._epsilon * self._epsilon_decay)
+        # the following only for epsgreedy policies
+        # TODO make it more generic
+        self._policy.update_eps()
         return loss
 
     def _update_target(self):
@@ -125,5 +124,5 @@ class DQNAgent(Agent):
                 step += 1
 
     def save(self, path, name='DQNAgent', v=1):
-        # TODO
-        pass
+        fname = f'{name}_{v}'
+        self._memory.save(fname)

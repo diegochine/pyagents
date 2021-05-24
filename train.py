@@ -10,9 +10,9 @@ import gin
 
 OUTPUT_DIR = './output'
 BATCH_SIZE = 64
-N_EPISODES = 9001
+N_EPISODES = 2001
 MAX_STEPS = 1000
-MIN_MEMORIES = 500
+MIN_MEMORIES = 200
 
 env = gym.make('CartPole-v0')
 state_size = env.observation_space.shape[0]
@@ -51,4 +51,4 @@ for episode in range(N_EPISODES):
     player.train(BATCH_SIZE)
 
     if (episode % 500) == 0:
-        pass # TODO player.save()
+        player.save('TODO ADD AGENT PATH')
