@@ -28,12 +28,15 @@ def compact_memories(path='./memories/'):
 @gin.configurable
 class Memory:
 
-    def __init__(self, size_short=5000, size_long=10000, ltmemory=None):
+    def __init__(self, size_short=5000, size_long=10000, ltmemory=None, save_dir='./memories'):
         if ltmemory is not None:
             self.ltmemory = ltmemory
         else:
             self.ltmemory = deque(maxlen=size_long)
         self.stmemory = deque(maxlen=size_short)
+        if not os.path.isdir(save_dir):
+            os.makedirs(save_dir)
+        self._save_dir = save_dir
 
     def __len__(self):
         return len(self.ltmemory)
@@ -60,7 +63,7 @@ class Memory:
         return vectorizing_fn(random.sample(list(self.ltmemory), batch_size))
 
     def save(self, name):
-        pickle.dump(self.ltmemory, open('memories/mem{}.pkl'.format(name), 'wb'))
+        pickle.dump(self.ltmemory, open(f'{self._save_dir}/mem-{name}.pkl', 'wb'))
 
     def clear_ltmemory(self):
         self.ltmemory.clear()
