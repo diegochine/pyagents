@@ -25,6 +25,7 @@ class DQNAgent(Agent):
                  epsilon_min: types.Float = 0.01,
                  target_update_period: int = 500,
                  tau: types.Float = 1.0,
+                 ddqn: bool = True,
                  memory_size: int = 10000):
         super(DQNAgent, self).__init__(state_shape, action_shape)
         self._memory = Memory(size_long=memory_size)
@@ -36,6 +37,7 @@ class DQNAgent(Agent):
         self._optimizer = optimizer
         self._td_errors_loss_fn = mean_squared_error  # Huber(reduction=tf.keras.losses.Reduction.NONE)
         self._train_step = tf.Variable(0, trainable=False, name="train step counter")
+        self._ddqn = ddqn
 
         policy = QPolicy(self._state_shape, self._action_shape, self._online_q_network)
         self._policy = EpsGreedyPolicy(policy, epsilon, epsilon_decay, epsilon_min)
@@ -68,14 +70,19 @@ class DQNAgent(Agent):
         self._memory.commit_stmemory([state, action, reward, next_state, done])
 
     def _loss(self, memories):
-        state_batch, action_batch, reward_batch, new_state_batch, done_batch = memories
-
+        state_batch, action_batch, reward_batch, next_state_batch, done_batch = memories
         current_q_values = self._online_q_network(state_batch)
-        next_target_q_values = self._target_q_network(new_state_batch)
-        next_online_q_values = self._online_q_network(new_state_batch)
+        next_target_q_values = self._target_q_network(next_state_batch)
 
-        adjusted_rewards = tf.stop_gradient(reward_batch + self._gamma * tf.math.reduce_max(next_target_q_values, axis=1))
-        target_values = tf.where(done_batch, reward_batch, adjusted_rewards)
+        if self._ddqn:
+            next_online_q_values = self._online_q_network(next_state_batch)
+            action_idx = tf.convert_to_tensor([[b, a]
+                                               for b, a in enumerate(tf.math.argmax(next_online_q_values, axis=1))])
+            tmp_rewards = tf.stop_gradient(reward_batch + self._gamma * tf.gather_nd(next_target_q_values, action_idx))
+        else:
+            tmp_rewards = tf.stop_gradient(reward_batch + self._gamma * tf.math.reduce_max(next_target_q_values, axis=1))
+
+        target_values = tf.where(done_batch, reward_batch, tmp_rewards)
         target_values = tf.stack([target_values for _ in range(self._action_shape)], axis=1)
         update_idx = tf.convert_to_tensor([[i == a for i in range(self._action_shape)] for a in action_batch])
         target_q_values = tf.where(update_idx, target_values, current_q_values)
