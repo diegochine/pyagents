@@ -29,15 +29,15 @@ class DQNAgent(Agent):
         super(DQNAgent, self).__init__(state_shape, action_shape)
         self._memory = Memory(size_long=memory_size)
         self._gamma = gamma
-        self._q_network = q_network
-        self._target_q_network = deepcopy(self._q_network)
+        self._online_q_network = q_network
+        self._target_q_network = deepcopy(self._online_q_network)
         self._target_update_period = target_update_period
         self._tau = tau
         self._optimizer = optimizer
         self._td_errors_loss_fn = mean_squared_error  # Huber(reduction=tf.keras.losses.Reduction.NONE)
         self._train_step = tf.Variable(0, trainable=False, name="train step counter")
 
-        policy = QPolicy(self._state_shape, self._action_shape, self._q_network)
+        policy = QPolicy(self._state_shape, self._action_shape, self._online_q_network)
         self._policy = EpsGreedyPolicy(policy, epsilon, epsilon_decay, epsilon_min)
 
     @property
@@ -70,15 +70,16 @@ class DQNAgent(Agent):
     def _loss(self, memories):
         state_batch, action_batch, reward_batch, new_state_batch, done_batch = memories
 
-        next_q_values = self._target_q_network(new_state_batch)
-        q_values = self._q_network(state_batch)
+        current_q_values = self._online_q_network(state_batch)
+        next_target_q_values = self._target_q_network(new_state_batch)
+        next_online_q_values = self._online_q_network(new_state_batch)
 
-        target_values = tf.where(done_batch, reward_batch,
-                                 tf.stop_gradient(reward_batch + self._gamma * tf.math.reduce_max(next_q_values, axis=1)))
+        adjusted_rewards = tf.stop_gradient(reward_batch + self._gamma * tf.math.reduce_max(next_target_q_values, axis=1))
+        target_values = tf.where(done_batch, reward_batch, adjusted_rewards)
         target_values = tf.stack([target_values for _ in range(self._action_shape)], axis=1)
         update_idx = tf.convert_to_tensor([[i == a for i in range(self._action_shape)] for a in action_batch])
-        target_q_values = tf.where(update_idx, target_values, q_values)
-        td_loss = self._td_errors_loss_fn(q_values, target_q_values)
+        target_q_values = tf.where(update_idx, target_values, current_q_values)
+        td_loss = self._td_errors_loss_fn(current_q_values, target_q_values)
         return tf.reduce_mean(td_loss)
 
     def _train(self, batch_size):
@@ -86,7 +87,7 @@ class DQNAgent(Agent):
         memories = self._memory.sample(batch_size, vectorizing_fn=self._vectorize_samples)
         with tf.GradientTape() as tape:
             loss = self._loss(memories)
-        variables_to_train = self._q_network.trainable_weights
+        variables_to_train = self._online_q_network.trainable_weights
         grads = tape.gradient(loss, variables_to_train)
         grads_and_vars = list(zip(grads, variables_to_train))
         self._optimizer.apply_gradients(grads_and_vars)
@@ -99,7 +100,7 @@ class DQNAgent(Agent):
         return loss
 
     def _update_target(self):
-        source_variables = self._q_network.variables
+        source_variables = self._online_q_network.variables
         target_variables = self._target_q_network.variables
         for (sv, tv) in zip(source_variables, target_variables):
             tv.assign((1 - self._tau) * tv + self._tau * sv)
