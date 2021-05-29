@@ -9,13 +9,38 @@ from keras.models import Model
 from networks.network import Network
 
 
+def _copy_layer(layer):
+    """Create a copy of a Keras layer with identical parameters.
+  The new layer will not share weights with the old one.
+  Args:
+    layer: An instance of `tf.keras.layers.Layer`.
+  Returns:
+    A new keras layer.
+  Raises:
+    TypeError: If `layer` is not a keras layer.
+    ValueError: If `layer` cannot be correctly cloned.
+  """
+    if not isinstance(layer, tf.keras.layers.Layer):
+        raise TypeError('layer is not a keras layer: %s' % str(layer))
+
+    if layer.built:
+        logging.warning(
+            'Beware: Copying a layer that has already been built: \'%s\'.  '
+            'This can lead to subtle bugs because the original layer\'s weights '
+            'will not be used in the copy.', layer.name)
+    # Get a fresh copy so we don't modify an incoming layer in place.  Weights
+    # will not be shared.
+    return type(layer).from_config(layer.get_config())
+
+
 @gin.configurable
 class EncodingNetwork(Network):
 
-    def __init__(self, state_shape,
+    def __init__(self, state_shape, preprocessing_layers=None,
                  conv_layer_params=None, fc_layer_params=None, activation=relu, dtype=tf.float32,
                  name='EncodingNetwork', conv_type='2d'):
         super().__init__(name=name)
+        self._preprocessing_layers = preprocessing_layers
 
         kernel_initializer = tf.keras.initializers.VarianceScaling(
             scale=2.0, mode='fan_in', distribution='truncated_normal')
@@ -54,7 +79,7 @@ class EncodingNetwork(Network):
 
         if fc_layer_params:
             for num_units in fc_layer_params:
-                kernal_regularizer = None # if necessary sholud have wheight decay param as in tf
+                kernal_regularizer = None  # if necessary sholud have wheight decay param as in tf
                 layers.append(
                     tf.keras.layers.Dense(
                         num_units,
@@ -71,6 +96,9 @@ class EncodingNetwork(Network):
 
     def call(self, inputs, training=False, mask=None):
         states = inputs
+        if self._preprocessing_layers is not None:
+            for prep_layer in self._preprocessing_layers:
+                states = prep_layer(states, training=training)
         for layer in self._postprocessing_layers:
             states = layer(states, training=training)
         return states
