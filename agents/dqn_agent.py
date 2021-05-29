@@ -7,6 +7,7 @@ from agents.agent import Agent
 from memory import Memory
 from networks import Network
 from policies import QPolicy, EpsGreedyPolicy
+from utils import types
 from copy import deepcopy
 
 
@@ -18,11 +19,12 @@ class DQNAgent(Agent):
                  action_shape: tuple,
                  q_network: Network,
                  optimizer: tf.keras.optimizers.Optimizer,
-                 gamma: float = 0.5,
-                 epsilon: float = 0.1,
-                 epsilon_decay: float = 0.98,
-                 epsilon_min: float = 0.01,
+                 gamma: types.Float = 0.5,
+                 epsilon: types.Float = 0.1,
+                 epsilon_decay: types.Float = 0.98,
+                 epsilon_min: types.Float = 0.01,
                  target_update_period: int = 500,
+                 tau: types.Float = 1.0,
                  memory_size: int = 10000):
         super(DQNAgent, self).__init__(state_shape, action_shape)
         self._memory = Memory(size_long=memory_size)
@@ -30,6 +32,7 @@ class DQNAgent(Agent):
         self._q_network = q_network
         self._target_q_network = deepcopy(self._q_network)
         self._target_update_period = target_update_period
+        self._tau = tau
         self._optimizer = optimizer
         self._td_errors_loss_fn = mean_squared_error  # Huber(reduction=tf.keras.losses.Reduction.NONE)
         self._train_step = tf.Variable(0, trainable=False, name="train step counter")
@@ -99,7 +102,7 @@ class DQNAgent(Agent):
         source_variables = self._q_network.variables
         target_variables = self._target_q_network.variables
         for (sv, tv) in zip(source_variables, target_variables):
-            tv.assign(sv)
+            tv.assign((1 - self._tau) * tv + self._tau * sv)
 
     def _vectorize_samples(self, mini_batch):
         state_batch = tf.convert_to_tensor([sample[0].reshape(self.state_shape)
