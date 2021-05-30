@@ -1,11 +1,6 @@
 import gin
 import tensorflow as tf
-from keras import Input
-from keras.layers import Dense, Conv1D, Conv2D
 from keras.activations import relu
-from keras.regularizers import l2, l1_l2
-from keras.optimizers import Adam
-from keras.models import Model
 from networks.network import Network
 
 
@@ -104,4 +99,5 @@ class EncodingNetwork(Network):
         return states
 
     def get_config(self):
-        pass
+        return super(EncodingNetwork, self).get_config()
+        # TODO finish

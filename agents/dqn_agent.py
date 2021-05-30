@@ -26,9 +26,12 @@ class DQNAgent(Agent):
                  target_update_period: int = 500,
                  tau: types.Float = 1.0,
                  ddqn: bool = True,
-                 memory_size: int = 10000):
-        super(DQNAgent, self).__init__(state_shape, action_shape)
-        self._memory = Memory(size_long=memory_size)
+                 memory_size: int = 10000,
+                 name: str = 'DQNAgent',
+                 save_dir: str = './output'):
+        super(DQNAgent, self).__init__(state_shape, action_shape, name=name)
+        self._save_dir = f'{save_dir}/{name}'
+        self._memory = Memory(size_long=memory_size, save_dir=self._save_dir)
         self._gamma = gamma
         self._online_q_network = q_network
         self._target_q_network = deepcopy(self._online_q_network)
@@ -134,6 +137,14 @@ class DQNAgent(Agent):
                 s = new_state
                 step += 1
 
-    def save(self, path, name='DQNAgent', v=1):
-        fname = f'{name}_{v}'
+    def save(self, v=1):
+        fname = f'{self._name}_v{v}'
         self._memory.save(fname)
+        net_config = self._online_q_network.get_config()
+        net_weights = self._online_q_network.get_weights()
+        # TODO save network
+
+    @classmethod
+    def load(cls, path):
+        # TODO https://github.com/keras-team/keras/blob/be4cef42ab21d85398fb6930ec5419a3de8a7d71/keras/saving/hdf5_format.py
+        pass

@@ -17,7 +17,8 @@ class QNetwork(Network):
             preprocessing_layers=preprocessing_layers,
             conv_layer_params=conv_layer_params,
             fc_layer_params=fc_layer_params,
-            activation=activation
+            activation=activation,
+            name=name
         )
         self._q_layer = tf.keras.layers.Dense(
             action_shape,
@@ -32,4 +33,11 @@ class QNetwork(Network):
         return q_values
 
     def get_config(self):
-        pass
+        config = super(QNetwork, self).get_config()
+        config.update({'q_layer': self._q_layer.get_config()})
+        config.update({'encoder': self._encoder.get_config()})
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)

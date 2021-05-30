@@ -2,10 +2,6 @@ import abc
 import tensorflow as tf
 
 
-def load_agent(path, name):
-    pass  # TODO
-
-
 class Agent(tf.Module, abc.ABC):
     """Abstract base class for all implemented agents.
     The agent serves two purposes:
@@ -19,7 +15,7 @@ class Agent(tf.Module, abc.ABC):
       some internal network
     """
 
-    def __init__(self, state_shape, action_shape, name=None):
+    def __init__(self, state_shape, action_shape, name='Agent'):
         super(Agent, self).__init__(name=name)
         self._state_shape = state_shape
         self._action_shape = action_shape
@@ -45,6 +41,11 @@ class Agent(tf.Module, abc.ABC):
     def train(self, batch_size):
         return self._train(batch_size)
 
-    #@abc.abstractmethod
-    #def save(self, path):
-    #    pass
+    @abc.abstractmethod
+    def save(self, path):
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def load(cls, path):
+        pass
