@@ -5,8 +5,8 @@ import tensorflow as tf
 
 class Network(tf.keras.layers.Layer, ABC):
 
-    def __init__(self, name):
-        super(Network, self).__init__(name=name)
+    def __init__(self, name, trainable=True, dtype=tf.float32):
+        super(Network, self).__init__(name=name, trainable=trainable, dtype=dtype)
 
     @abstractmethod
     def call(self, inputs, training=None, mask=None):
