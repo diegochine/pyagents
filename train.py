@@ -4,7 +4,8 @@ import numpy as np
 import gym
 from agents import DQNAgent
 from networks import QNetwork
-from keras.optimizers import Adam
+from memory import PrioritizedBuffer
+from keras.optimizers import RMSprop
 import gin
 
 
@@ -22,8 +23,9 @@ if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)
 
 gin.parse_config_file('config/cartpole_v0.gin')
+buffer = PrioritizedBuffer()
 q_net = QNetwork(state_size, action_size)
-player = DQNAgent(state_size, action_size, q_network=q_net, optimizer=Adam(learning_rate=0.003))
+player = DQNAgent(state_size, action_size, q_network=q_net, buffer=buffer, optimizer=RMSprop(momentum=0.1), name='cartpole')
 scores = deque(maxlen=100)
 player.memory_init(env, MAX_STEPS, MIN_MEMORIES)
 
@@ -51,4 +53,4 @@ for episode in range(N_EPISODES):
     player.train(BATCH_SIZE)
 
     if (episode % 500) == 0:
-        player.save('TODO ADD AGENT PATH')
+        player.save(v=(episode//500))

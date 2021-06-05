@@ -1,9 +1,8 @@
-import os
 import random
 from collections import deque
 import pickle
-
 import gin
+from memory.buffer import Buffer
 
 
 def load_memories(path='./memories/'):
@@ -15,28 +14,16 @@ def load_memories(path='./memories/'):
         return None
 
 
-def compact_memories(path='./memories/'):
-    memories = pickle.load(open(path + 'dataset.pkl', 'rb'))
-    for fname in os.listdir(path):
-        if fname.endswith('pkl') and not fname.startswith('dataset'):
-            with open(path + fname, 'rb') as f:
-                memories.extend(pickle.load(f))
-            os.remove(path + fname)
-    pickle.dump(memories, open(path + 'dataset.pkl', 'wb'))
-
-
 @gin.configurable
-class Memory:
+class UniformBuffer(Buffer):
 
-    def __init__(self, size_short=5000, size_long=10000, ltmemory=None, save_dir='./memories'):
+    def __init__(self, size_short=5000, size_long=50000, ltmemory=None, save_dir='./memories'):
+        super().__init__(save_dir)
         if ltmemory is not None:
             self.ltmemory = ltmemory
         else:
             self.ltmemory = deque(maxlen=size_long)
         self.stmemory = deque(maxlen=size_short)
-        if not os.path.isdir(save_dir):
-            os.makedirs(save_dir)
-        self._save_dir = save_dir
 
     def __len__(self):
         return len(self.ltmemory)
@@ -51,7 +38,7 @@ class Memory:
 
         self.stmemory.append(fragment)
 
-    def commit_ltmemory(self):
+    def commit_ltmemory(self, **kwargs):
         for mem in self.stmemory:
             self.ltmemory.append(mem)
         self.clear_stmemory()
@@ -60,13 +47,10 @@ class Memory:
         self.stmemory.clear()
 
     def sample(self, batch_size, vectorizing_fn=lambda x: x):
-        return vectorizing_fn(random.sample(list(self.ltmemory), batch_size))
+        return vectorizing_fn(random.sample(list(self.ltmemory), batch_size)), []  # no need to return samples indexes
 
     def save(self, name):
         pickle.dump(self.ltmemory, open(f'{self._save_dir}/mem-{name}.pkl', 'wb'))
 
     def clear_ltmemory(self):
         self.ltmemory.clear()
-
-    def last_episode(self):
-        return self.stmemory
