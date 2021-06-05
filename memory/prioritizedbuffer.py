@@ -1,17 +1,7 @@
 import numpy as np
-from collections import deque
-import pickle
 import gin
+from collections import deque
 from memory.buffer import Buffer
-
-
-def load_memories(path='./memories/'):
-    try:
-        with open(path + 'dataset.pkl', 'rb') as f:
-            memories = pickle.load(f)
-        return memories
-    except FileNotFoundError:
-        return None
 
 
 # TODO implement importance sampling (see https://danieltakeshi.github.io/2019/07/14/per/)
@@ -57,9 +47,6 @@ class PrioritizedBuffer(Buffer):
         probs = priorities / np.sum(priorities)
         indexes = np.random.choice(list(self.ltmemory.keys()), size=batch_size, replace=False, p=probs)
         return vectorizing_fn([self.ltmemory[idx][0] for idx in indexes]), indexes
-
-    def save(self, name):
-        pickle.dump(self.ltmemory, open(f'{self._save_dir}/mem-{name}.pkl', 'wb'))
 
     def clear_ltmemory(self):
         self.ltmemory.clear()
