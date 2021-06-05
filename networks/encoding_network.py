@@ -1,6 +1,5 @@
 import gin
 import tensorflow as tf
-from keras.activations import relu
 from networks.network import Network
 
 
@@ -32,9 +31,10 @@ def _copy_layer(layer):
 class EncodingNetwork(Network):
 
     def __init__(self, state_shape, preprocessing_layers=None,
-                 conv_layer_params=None, fc_layer_params=None, activation=relu, dtype=tf.float32,
+                 conv_layer_params=None, fc_layer_params=None, activation='relu', dtype=tf.float32,
                  name='EncodingNetwork', conv_type='2d'):
         super().__init__(name=name)
+        self._state_shape = state_shape
         self._preprocessing_layers = preprocessing_layers
 
         kernel_initializer = tf.keras.initializers.VarianceScaling(
@@ -88,6 +88,14 @@ class EncodingNetwork(Network):
         # then track.
         self._postprocessing_layers = layers
         self.built = True  # Allow access to self.variables
+        self._config = {'state_shape': state_shape,
+                        'preprocessing_layers': [lay.get_config() for lay in self._preprocessing_layers],
+                        'conv_layer_params': conv_layer_params,
+                        'fc_layer_params': fc_layer_params,
+                        'activation': activation,
+                        'dtype': dtype,
+                        'name': name,
+                        'conv_type': conv_type}
 
     def call(self, inputs, training=False, mask=None):
         states = inputs
@@ -99,5 +107,13 @@ class EncodingNetwork(Network):
         return states
 
     def get_config(self):
-        return super(EncodingNetwork, self).get_config()
-        # TODO finish
+        config = super(EncodingNetwork, self).get_config()
+        config.update(self._config)
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        """Be careful with the type of the preprocessing layers:
+        they must be a list of already built layer and not a list
+        of their configurations."""
+        return cls(**config)
