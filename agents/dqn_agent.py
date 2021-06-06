@@ -1,12 +1,14 @@
 from typing import Optional
 import gin
+import h5py
 import numpy as np
 import tensorflow as tf
 from keras.losses import Huber, mean_squared_error
+from tensorflow.python.keras.saving.saved_model import json_utils
 
 from agents.agent import Agent
 from memory import Buffer, UniformBuffer
-from networks import Network
+from networks import QNetwork
 from policies import QPolicy, EpsGreedyPolicy
 from utils import types
 from copy import deepcopy
@@ -15,10 +17,13 @@ from copy import deepcopy
 @gin.configurable
 class DQNAgent(Agent):
 
+    CFG_Q_NET = 'qnet.json'
+    W_Q_NET = 'qnet.hdf5'
+
     def __init__(self,
                  state_shape: tuple,
                  action_shape: tuple,
-                 q_network: Network,
+                 q_network: QNetwork,
                  optimizer: tf.keras.optimizers.Optimizer,
                  gamma: types.Float = 0.5,
                  epsilon: types.Float = 0.1,
@@ -151,9 +156,32 @@ class DQNAgent(Agent):
         self._memory.save(fname)
         net_config = self._online_q_network.get_config()
         net_weights = self._online_q_network.get_weights()
-        # TODO save network
+        json.dump(net_config, open(f'{self._save_dir}/{self.CFG_Q_NET}', 'w'))
+
+        f = h5py.File(f'{self._save_dir}/{self.W_Q_NET}', mode='w')
+        try:
+            for k, v in net_config.items():
+                if isinstance(v, (dict, list, tuple)):
+                    f.attrs[k] = json.dumps(
+                        v, default=json_utils.get_json_type).encode('utf8')
+                else:
+                    f.attrs[k] = v
+
+            model_weights_group = f.create_group('model_weights')
+            model_layers = model.layers
+            save_weights_to_hdf5_group(model_weights_group, model_layers)
+
+            # TODO(b/128683857): Add integration tests between tf.keras and external
+            # Keras, to avoid breaking TF.js users.
+            if (include_optimizer and model.optimizer and
+                    not isinstance(model.optimizer, optimizer_v1.TFOptimizer)):
+                save_optimizer_weights_to_hdf5_group(f, model.optimizer)
+
+            f.flush()
+        finally:
+            f.close()
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path, optimizer=None):
         # TODO https://github.com/keras-team/keras/blob/be4cef42ab21d85398fb6930ec5419a3de8a7d71/keras/saving/hdf5_format.py
-        pass
+        q_net_cfg = json.load(open(f'{path}/{cls.CFG_Q_NET}', 'r'))
