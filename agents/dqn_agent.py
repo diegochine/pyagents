@@ -54,6 +54,15 @@ class DQNAgent(Agent):
         self._train_step = tf.Variable(0, trainable=False, name="train step counter")
         self._ddqn = ddqn
         self._training = training
+        self._name = name
+
+        self._config = {
+            'gamma': self._gamma,
+            'target_update_period': self._target_update_period,
+            'tau': self._tau,
+            'ddqn': self._ddqn,
+            'name': self._name
+        }
 
         policy = QPolicy(self._state_shape, self._action_shape, self._online_q_network)
         self._policy = EpsGreedyPolicy(policy, epsilon, epsilon_decay, epsilon_min)
@@ -164,11 +173,17 @@ class DQNAgent(Agent):
 
         f = h5py.File(f'{self._save_dir}/{self.W_Q_NET}', mode='w')
         try:
+            agent_group = f.create_group('agent')
+            for k, v in self._config.items():
+                agent_group.attrs[k] = v
+
+            net_config_group = f.create_group('net_config')
             for k, v in net_config.items():
                 if isinstance(v, (dict, list, tuple)):
-                    f.attrs[k] = json.dumps(v, default=json_utils.get_json_type).encode('utf8')
+                    net_config_group.attrs[k] = json.dumps(v, default=json_utils.get_json_type).encode('utf8')
                 else:
-                    f.attrs[k] = v
+                    net_config_group.attrs[k] = v
+
             net_weights_group = f.create_group('net_weights')
             for i, lay_weights in enumerate(net_weights):
                 net_weights_group.create_dataset(f'net_weights{i}', data=lay_weights)
@@ -186,8 +201,14 @@ class DQNAgent(Agent):
         if optimizer is None:
             optimizer = tf.keras.optimizers.RMSprop(momentum=0.1)
         f = h5py.File(f'{path}/{cls.W_Q_NET}', mode='r')
+        agent_group = f['agent']
+        agent_config = {}
+        for k, v in agent_group.attrs.items():
+            agent_config[k] = v
+
         net_config = {}
-        for k, v in f.attrs.items():
+        net_config_group = f['net_config']
+        for k, v in net_config_group.attrs.items():
             if isinstance(v, bytes):
                 net_config[k] = json_utils.decode(v)
             else:
@@ -199,10 +220,10 @@ class DQNAgent(Agent):
         q_net(tf.ones((1, net_config['state_shape'])))
         q_net.set_weights(net_weights)
         buffer = load_memories(path)
-        agent_config = {'state_shape': net_config['state_shape'],
-                        'action_shape': net_config['action_shape'],
-                        'q_network': q_net,
-                        'optimizer': optimizer,
-                        'buffer': buffer,
-                        **kwargs}
+        agent_config.update({'state_shape': net_config['state_shape'],
+                             'action_shape': net_config['action_shape'],
+                             'q_network': q_net,
+                             'optimizer': optimizer,
+                             'buffer': buffer,
+                             **kwargs})
         return cls(**agent_config)
