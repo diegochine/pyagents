@@ -30,6 +30,9 @@ class Buffer(ABC):
     def sample(self, batch_size, vectorizing_fn):
         pass
 
+    def set_save_dir(self, path):
+        self._save_dir = path
+
     def save(self):
         pickle.dump(self.ltmemory, open(os.path.join(self._save_dir, 'memories.pkl'), 'wb'))
 
