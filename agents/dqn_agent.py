@@ -6,7 +6,7 @@ import json
 import numpy as np
 import tensorflow as tf
 from keras.losses import Huber, mean_squared_error
-from tensorflow.python.keras.saving.saved_model import json_utils
+from utils import json_utils
 from agents.agent import Agent
 from memory import Buffer, UniformBuffer, load_memories
 from networks import QNetwork
