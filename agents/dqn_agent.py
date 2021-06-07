@@ -39,6 +39,7 @@ class DQNAgent(Agent):
         if not os.path.isdir(self._save_dir):
             os.makedirs(self._save_dir)
         if buffer is not None:
+            buffer.set_save_dir(self._save_dir)
             self._memory: Buffer = buffer
         else:
             self._memory: Buffer = UniformBuffer(save_dir=self._save_dir)
