@@ -1,12 +1,13 @@
 DQNAgent.gamma = 0.8
 DQNAgent.epsilon = 1.0
-DQNAgent.epsilon_decay = 0.998
+DQNAgent.epsilon_decay = 0.997
 DQNAgent.target_update_period = 50
+DQNAgent.name = 'cartpole'
 
 QNetwork.fc_layer_params=(64, 64)
 QNetwork.name = 'cartpole'
 
-UniformBuffer.size_short = 500
+UniformBuffer.size_short = 1000
 UniformBuffer.size_long = 10000
-PrioritizedBuffer.size_short = 500
+PrioritizedBuffer.size_short = 1000
 PrioritizedBuffer.size_long = 10000

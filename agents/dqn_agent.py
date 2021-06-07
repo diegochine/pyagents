@@ -33,6 +33,7 @@ class DQNAgent(Agent):
                  ddqn: bool = True,
                  buffer: Optional[Buffer] = None,
                  name: str = 'DQNAgent',
+                 training: bool = True,
                  save_dir: str = './output'):
         super(DQNAgent, self).__init__(state_shape, action_shape, name=name)
         self._save_dir = os.path.join(save_dir, name)
@@ -52,6 +53,7 @@ class DQNAgent(Agent):
         self._td_errors_loss_fn = mean_squared_error  # Huber(reduction=tf.keras.losses.Reduction.NONE)
         self._train_step = tf.Variable(0, trainable=False, name="train step counter")
         self._ddqn = ddqn
+        self._training = training
 
         policy = QPolicy(self._state_shape, self._action_shape, self._online_q_network)
         self._policy = EpsGreedyPolicy(policy, epsilon, epsilon_decay, epsilon_min)
@@ -106,23 +108,24 @@ class DQNAgent(Agent):
 
     def _train(self, batch_size):
         self._memory.commit_ltmemory()
-        memories, indexes = self._memory.sample(batch_size, vectorizing_fn=self._minibatch_to_tf)
-        with tf.GradientTape() as tape:
-            td_loss = self._loss(memories)
-            loss = tf.reduce_mean(td_loss)
-        # use computed loss to update memories priorities (when using a prioritized buffer)
-        self._memory.update_samples(tf.math.abs(td_loss), indexes)
-        variables_to_train = self._online_q_network.trainable_weights
-        grads = tape.gradient(loss, variables_to_train)
-        grads_and_vars = list(zip(grads, variables_to_train))
-        self._optimizer.apply_gradients(grads_and_vars)
-        self._train_step.assign_add(1)
-        if tf.math.mod(self._train_step, self._target_update_period) == 0:
-            self._update_target()
-        # the following only for epsgreedy policies
-        # TODO make it more generic
-        self._policy.update_eps()
-        return loss
+        if self._training:
+            memories, indexes = self._memory.sample(batch_size, vectorizing_fn=self._minibatch_to_tf)
+            with tf.GradientTape() as tape:
+                td_loss = self._loss(memories)
+                loss = tf.reduce_mean(td_loss)
+            # use computed loss to update memories priorities (when using a prioritized buffer)
+            self._memory.update_samples(tf.math.abs(td_loss), indexes)
+            variables_to_train = self._online_q_network.trainable_weights
+            grads = tape.gradient(loss, variables_to_train)
+            grads_and_vars = list(zip(grads, variables_to_train))
+            self._optimizer.apply_gradients(grads_and_vars)
+            self._train_step.assign_add(1)
+            if tf.math.mod(self._train_step, self._target_update_period) == 0:
+                self._update_target()
+            # the following only for epsgreedy policies
+            # TODO make it more generic
+            self._policy.update_eps()
+            return loss
 
     def _update_target(self):
         source_variables = self._online_q_network.variables
@@ -166,7 +169,6 @@ class DQNAgent(Agent):
                     f.attrs[k] = json.dumps(v, default=json_utils.get_json_type).encode('utf8')
                 else:
                     f.attrs[k] = v
-
             net_weights_group = f.create_group('net_weights')
             for i, lay_weights in enumerate(net_weights):
                 net_weights_group.create_dataset(f'net_weights{i}', data=lay_weights)
