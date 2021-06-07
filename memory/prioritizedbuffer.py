@@ -8,7 +8,7 @@ from memory.buffer import Buffer
 @gin.configurable
 class PrioritizedBuffer(Buffer):
 
-    def __init__(self, size_short=5000, size_long=50000, ltmemory=None, eps=0.02, save_dir='./memories'):
+    def __init__(self, save_dir, size_short=5000, size_long=50000, ltmemory=None, eps=0.02):
         super().__init__(save_dir)
         if ltmemory is not None:
             self.ltmemory = ltmemory
