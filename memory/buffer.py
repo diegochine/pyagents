@@ -4,9 +4,9 @@ import gin
 from abc import ABC, abstractmethod
 
 
-def load_memories(path='./memories/'):
+def load_memories(path):
     try:
-        with open(path + 'dataset.pkl', 'rb') as f:
+        with open(os.path.join(path, 'memories.pkl'), 'rb') as f:
             memories = pickle.load(f)
         return memories
     except FileNotFoundError:
@@ -30,8 +30,8 @@ class Buffer(ABC):
     def sample(self, batch_size, vectorizing_fn):
         pass
 
-    def save(self, name):
-        pickle.dump(self.ltmemory, open(f'{self._save_dir}/mem-{name}.pkl', 'wb'))
+    def save(self):
+        pickle.dump(self.ltmemory, open(os.path.join(self._save_dir, 'memories.pkl'), 'wb'))
 
     def update_samples(self, errors, indexes):
         """ subclasses may optionally implement this method"""

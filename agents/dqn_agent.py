@@ -1,13 +1,14 @@
+import os
 from typing import Optional
 import gin
 import h5py
+import json
 import numpy as np
 import tensorflow as tf
 from keras.losses import Huber, mean_squared_error
 from tensorflow.python.keras.saving.saved_model import json_utils
-
 from agents.agent import Agent
-from memory import Buffer, UniformBuffer
+from memory import Buffer, UniformBuffer, load_memories
 from networks import QNetwork
 from policies import QPolicy, EpsGreedyPolicy
 from utils import types
@@ -16,8 +17,6 @@ from copy import deepcopy
 
 @gin.configurable
 class DQNAgent(Agent):
-
-    CFG_Q_NET = 'qnet.json'
     W_Q_NET = 'qnet.hdf5'
 
     def __init__(self,
@@ -36,7 +35,9 @@ class DQNAgent(Agent):
                  name: str = 'DQNAgent',
                  save_dir: str = './output'):
         super(DQNAgent, self).__init__(state_shape, action_shape, name=name)
-        self._save_dir = f'{save_dir}/{name}'
+        self._save_dir = os.path.join(save_dir, name)
+        if not os.path.isdir(self._save_dir):
+            os.makedirs(self._save_dir)
         if buffer is not None:
             self._memory: Buffer = buffer
         else:
@@ -92,7 +93,8 @@ class DQNAgent(Agent):
                                                for b, a in enumerate(tf.math.argmax(next_online_q_values, axis=1))])
             tmp_rewards = tf.stop_gradient(reward_batch + self._gamma * tf.gather_nd(next_target_q_values, action_idx))
         else:
-            tmp_rewards = tf.stop_gradient(reward_batch + self._gamma * tf.math.reduce_max(next_target_q_values, axis=1))
+            tmp_rewards = tf.stop_gradient(
+                reward_batch + self._gamma * tf.math.reduce_max(next_target_q_values, axis=1))
 
         target_values = tf.where(done_batch, reward_batch, tmp_rewards)
         target_values = tf.stack([target_values for _ in range(self._action_shape)], axis=1)
@@ -151,37 +153,53 @@ class DQNAgent(Agent):
                 s = new_state
                 step += 1
 
-    def save(self, v=1):
-        fname = f'{self._name}_v{v}'
-        self._memory.save(fname)
+    def save(self, include_optimizer=False):
+        self._memory.save()
         net_config = self._online_q_network.get_config()
         net_weights = self._online_q_network.get_weights()
-        json.dump(net_config, open(f'{self._save_dir}/{self.CFG_Q_NET}', 'w'))
 
         f = h5py.File(f'{self._save_dir}/{self.W_Q_NET}', mode='w')
         try:
             for k, v in net_config.items():
                 if isinstance(v, (dict, list, tuple)):
-                    f.attrs[k] = json.dumps(
-                        v, default=json_utils.get_json_type).encode('utf8')
+                    f.attrs[k] = json.dumps(v, default=json_utils.get_json_type).encode('utf8')
                 else:
                     f.attrs[k] = v
 
-            model_weights_group = f.create_group('model_weights')
-            model_layers = model.layers
-            save_weights_to_hdf5_group(model_weights_group, model_layers)
+            net_weights_group = f.create_group('net_weights')
+            for i, lay_weights in enumerate(net_weights):
+                net_weights_group.create_dataset(f'net_weights{i}', data=lay_weights)
 
-            # TODO(b/128683857): Add integration tests between tf.keras and external
-            # Keras, to avoid breaking TF.js users.
-            if (include_optimizer and model.optimizer and
-                    not isinstance(model.optimizer, optimizer_v1.TFOptimizer)):
-                save_optimizer_weights_to_hdf5_group(f, model.optimizer)
+            if include_optimizer and self._optimizer:
+                pass
+                # TODO save_optimizer_weights_to_hdf5_group(f, model.optimizer)
 
             f.flush()
         finally:
             f.close()
 
     @classmethod
-    def load(cls, path, optimizer=None):
-        # TODO https://github.com/keras-team/keras/blob/be4cef42ab21d85398fb6930ec5419a3de8a7d71/keras/saving/hdf5_format.py
-        q_net_cfg = json.load(open(f'{path}/{cls.CFG_Q_NET}', 'r'))
+    def load(cls, path, preprocessing_layers=None, optimizer=None, **kwargs):
+        if optimizer is None:
+            optimizer = tf.keras.optimizers.RMSprop(momentum=0.1)
+        f = h5py.File(f'{path}/{cls.W_Q_NET}', mode='r')
+        net_config = {}
+        for k, v in f.attrs.items():
+            if isinstance(v, bytes):
+                net_config[k] = json_utils.decode(v)
+            else:
+                net_config[k] = v
+        net_weights_group = f['net_weights']
+        net_weights = [weights[()] for name, weights in net_weights_group.items()]
+        f.close()
+        q_net = QNetwork.from_config(net_config)
+        q_net(tf.ones((1, net_config['state_shape'])))
+        q_net.set_weights(net_weights)
+        buffer = load_memories(path)
+        agent_config = {'state_shape': net_config['state_shape'],
+                        'action_shape': net_config['action_shape'],
+                        'q_network': q_net,
+                        'optimizer': optimizer,
+                        'buffer': buffer,
+                        **kwargs}
+        return cls(**agent_config)

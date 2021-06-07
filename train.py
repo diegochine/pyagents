@@ -26,6 +26,7 @@ gin.parse_config_file('config/cartpole_v0.gin')
 buffer = PrioritizedBuffer()
 q_net = QNetwork(state_size, action_size)
 player = DQNAgent(state_size, action_size, q_network=q_net, buffer=buffer, optimizer=RMSprop(momentum=0.1), name='cartpole')
+# player = DQNAgent.load('output/cartpole')
 scores = deque(maxlen=100)
 player.memory_init(env, MAX_STEPS, MIN_MEMORIES)
 
@@ -52,5 +53,5 @@ for episode in range(N_EPISODES):
 
     player.train(BATCH_SIZE)
 
-    if (episode % 500) == 0:
-        player.save(v=(episode//500))
+    if (episode % 100) == 0:
+        player.save()
