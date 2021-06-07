@@ -15,7 +15,7 @@ class QNetwork(Network):
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
                         'preprocessing_layers': [lay.get_config() for lay in preprocessing_layers]
-                                                 if preprocessing_layers else [],
+                        if preprocessing_layers else [],
                         'conv_layer_params': conv_layer_params if conv_layer_params else [],
                         'fc_layer_params': fc_layer_params if fc_layer_params else [],
                         'activation': activation,
