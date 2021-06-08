@@ -1,13 +1,16 @@
 import random
 import gin
 from collections import deque
+
+import numpy as np
+
 from memory.buffer import Buffer
 
 
 @gin.configurable
 class UniformBuffer(Buffer):
 
-    def __init__(self, save_dir, size_short=5000, size_long=50000, ltmemory=None):
+    def __init__(self, save_dir=None, size_short=5000, size_long=50000, ltmemory=None):
         super().__init__(save_dir)
         if ltmemory is not None:
             self.ltmemory = ltmemory
@@ -37,7 +40,8 @@ class UniformBuffer(Buffer):
         self.stmemory.clear()
 
     def sample(self, batch_size, vectorizing_fn=lambda x: x):
-        return vectorizing_fn(random.sample(list(self.ltmemory), batch_size)), []  # no need to return samples indexes
+        # no need to return samples indexes, and is_weights contains all ones (as it's not used)
+        return vectorizing_fn(random.sample(list(self.ltmemory), batch_size)), [], np.ones(batch_size)
 
     def clear_ltmemory(self):
         self.ltmemory.clear()

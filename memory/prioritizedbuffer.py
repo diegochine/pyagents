@@ -8,7 +8,7 @@ from memory.buffer import Buffer
 @gin.configurable
 class PrioritizedBuffer(Buffer):
 
-    def __init__(self, save_dir, size_short=5000, size_long=50000, ltmemory=None, eps=0.02):
+    def __init__(self, save_dir=None, size_short=5000, size_long=50000, ltmemory=None, eps=0.02, alpha=0.5, beta=0.4):
         super().__init__(save_dir)
         if ltmemory is not None:
             self.ltmemory = ltmemory
@@ -19,6 +19,8 @@ class PrioritizedBuffer(Buffer):
         self._idx = 0
         self._max_p = 1/size_long
         self._eps = eps
+        self._alpha = alpha
+        self._beta = beta
 
     def __len__(self):
         return len(self.ltmemory)
@@ -44,9 +46,13 @@ class PrioritizedBuffer(Buffer):
 
     def sample(self, batch_size, vectorizing_fn=lambda x: x):
         priorities = np.array([self.ltmemory[idx][1] for idx in self.ltmemory]) + self._eps
-        probs = priorities / np.sum(priorities)
+        priorities_pow = np.power(priorities, self._alpha)
+        probs = priorities_pow / priorities_pow.sum()
         indexes = np.random.choice(list(self.ltmemory.keys()), size=batch_size, replace=False, p=probs)
-        return vectorizing_fn([self.ltmemory[idx][0] for idx in indexes]), indexes
+        samples = [self.ltmemory[idx][0] for idx in indexes]
+        is_weights = np.power(1/(len(self.ltmemory) * probs[indexes]), self._beta)
+        is_weights = is_weights / np.max(is_weights)
+        return vectorizing_fn(samples), indexes, is_weights
 
     def clear_ltmemory(self):
         self.ltmemory.clear()
