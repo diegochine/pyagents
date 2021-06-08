@@ -17,8 +17,8 @@ def load_memories(path):
 class Buffer(ABC):
     """ Abstract class for all buffers"""
 
-    def __init__(self, save_dir):
-        if not os.path.isdir(save_dir):
+    def __init__(self, save_dir=None):
+        if save_dir is not None and not os.path.isdir(save_dir):
             os.makedirs(save_dir)
         self._save_dir = save_dir
 
@@ -34,6 +34,8 @@ class Buffer(ABC):
         self._save_dir = path
 
     def save(self):
+        if self._save_dir is None:
+            raise ValueError('Buffer needs a save_dir path')
         pickle.dump(self, open(os.path.join(self._save_dir, 'memories.pkl'), 'wb'))
 
     def update_samples(self, errors, indexes):
