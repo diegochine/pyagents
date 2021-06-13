@@ -154,14 +154,17 @@ class DQNAgent(Agent):
         done_batch = np.array([sample[4] for sample in minibatch])
         return [state_batch, action_batch, reward_batch, new_state_batch, done_batch]
 
-    def memory_init(self, env, max_steps, min_memories):
+    def memory_init(self, env, max_steps, min_memories, actions=None):
         while self.memory_len <= min_memories:
             s = env.reset()
             done = False
             step = 0
             self._memory.commit_ltmemory()
             while not done and step < max_steps:
-                a = env.action_space.sample()
+                if actions:
+                    a = np.random.choice(actions, 1)
+                else:
+                    a = env.action_space.sample()
                 new_state, r, done, _ = env.step(a)
                 self.remember(s, a, r, new_state, done)
                 s = new_state
