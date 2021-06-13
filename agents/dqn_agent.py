@@ -167,12 +167,12 @@ class DQNAgent(Agent):
                 s = new_state
                 step += 1
 
-    def save(self, include_optimizer=False):
+    def save(self, ver, include_optimizer=False):
         self._memory.save()
         net_config = self._online_q_network.get_config()
         net_weights = self._online_q_network.get_weights()
 
-        f = h5py.File(f'{self._save_dir}/{self.W_Q_NET}', mode='w')
+        f = h5py.File(f'{self._save_dir}/{self.W_Q_NET}_v{ver}', mode='w')
         try:
             agent_group = f.create_group('agent')
             for k, v in self._config.items():

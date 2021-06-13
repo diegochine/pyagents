@@ -11,11 +11,11 @@ import gin
 
 OUTPUT_DIR = './output'
 BATCH_SIZE = 64
-N_EPISODES = 2001
+N_EPISODES = 501
 MAX_STEPS = 1000
-MIN_MEMORIES = 200
+MIN_MEMORIES = 2000
 
-env = gym.make('CartPole-v0')
+env = gym.make('Asteroids-ram-v0')
 state_size = env.observation_space.shape[0]
 action_size = env.action_space.n
 
@@ -26,7 +26,7 @@ gin.parse_config_file('config/cartpole_v0.gin')
 buffer = PrioritizedBuffer()
 q_net = QNetwork(state_size, action_size)
 player = DQNAgent(state_size, action_size, q_network=q_net, buffer=buffer, optimizer=RMSprop(momentum=0.1), name='cartpole')
-# player = DQNAgent.load('output/cartpole')
+# player = DQNAgent.load('output/cartpole', epsilon=0.01, training=False)
 scores = deque(maxlen=100)
 player.memory_init(env, MAX_STEPS, MIN_MEMORIES)
 
@@ -54,4 +54,4 @@ for episode in range(N_EPISODES):
     player.train(BATCH_SIZE)
 
     if (episode % 100) == 0:
-        player.save()
+        player.save(ver=episode//100)
