@@ -47,5 +47,5 @@ class Agent(tf.Module, abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def load(cls, path):
+    def load(cls, path, ver):
         pass

@@ -201,10 +201,10 @@ class DQNAgent(Agent):
             f.close()
 
     @classmethod
-    def load(cls, path, preprocessing_layers=None, optimizer=None, **kwargs):
+    def load(cls, path, ver, preprocessing_layers=None, optimizer=None, **kwargs):
         if optimizer is None:
             optimizer = tf.keras.optimizers.RMSprop(momentum=0.1)
-        f = h5py.File(f'{path}/{cls.W_Q_NET}', mode='r')
+        f = h5py.File(f'{path}/{cls.W_Q_NET}_v{ver}', mode='r')
         agent_group = f['agent']
         agent_config = {}
         for k, v in agent_group.attrs.items():
