@@ -1,0 +1,17 @@
+train_agent.batch_size = 128
+train_agent.learning_rate = 0.000625
+train_agent.steps_to_train = 10
+
+DQNAgent.gamma = 0.7
+DQNAgent.epsilon = 1.0
+DQNAgent.epsilon_decay = 0.997
+DQNAgent.tau = 1
+DQNAgent.target_update_period = 20
+DQNAgent.name = 'CP_baseline'
+
+QNetwork.fc_layer_params = (32, 32)
+QNetwork.name = 'CP_baseline'
+
+PrioritizedBuffer.size_short = 1000
+PrioritizedBuffer.size_long = 25000
+PrioritizedBuffer.beta = 0
