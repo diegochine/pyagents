@@ -4,11 +4,10 @@ from collections import deque
 from memory.buffer import Buffer
 
 
-# TODO implement importance sampling (see https://danieltakeshi.github.io/2019/07/14/per/)
 @gin.configurable
 class PrioritizedBuffer(Buffer):
 
-    def __init__(self, save_dir=None, size_short=5000, size_long=50000, ltmemory=None, eps=0.02, alpha=0.5, beta=0.4):
+    def __init__(self, save_dir=None, size_short=5000, size_long=50000, ltmemory=None, eps=0.02, alpha=0.5, beta=0):
         super().__init__(save_dir)
         if ltmemory is not None:
             self.ltmemory = ltmemory
@@ -20,7 +19,13 @@ class PrioritizedBuffer(Buffer):
         self._max_p = 1/size_long
         self._eps = eps
         self._alpha = alpha
-        self._beta = beta
+        if isinstance(beta, int):
+            self._beta = beta
+            self._beta_max = beta
+            self._beta_inc = 0
+        elif isinstance(beta, tuple):
+            self._beta, self._beta_max, steps = beta
+            self._beta_inc = (self._beta_max - self._beta) / steps
 
     def __len__(self):
         return len(self.ltmemory)
@@ -50,8 +55,12 @@ class PrioritizedBuffer(Buffer):
         probs = priorities_pow / priorities_pow.sum()
         indexes = np.random.choice(list(self.ltmemory.keys()), size=batch_size, replace=False, p=probs)
         samples = [self.ltmemory[idx][0] for idx in indexes]
-        is_weights = np.power(1/(len(self.ltmemory) * probs[indexes]), self._beta)
-        is_weights = is_weights / np.max(is_weights)
+        if self._beta != 0:
+            is_weights = np.power(1/(len(self.ltmemory) * probs[indexes]), self._beta)
+            is_weights = is_weights / np.max(is_weights)
+            self._beta = min(self._beta + self._beta_inc, self._beta_max)
+        else:
+            is_weights = np.ones_like(indexes)
         return vectorizing_fn(samples), indexes, is_weights
 
     def clear_ltmemory(self):
