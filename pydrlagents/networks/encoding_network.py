@@ -1,6 +1,6 @@
 import gin
 import tensorflow as tf
-from networks.network import Network
+from pydrlagents.networks.network import Network
 
 
 def _copy_layer(layer):

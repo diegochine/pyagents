@@ -1,8 +1,8 @@
 import gin
 import tensorflow as tf
 
-from networks.network import Network
-from networks.encoding_network import EncodingNetwork
+from pydrlagents.networks.network import Network
+from pydrlagents.networks.encoding_network import EncodingNetwork
 
 
 @gin.configurable

@@ -1,7 +1,8 @@
 import gin
 import numpy as np
-from policies.policy import Policy
-from policies.randompolicy import RandomPolicy
+from pydrlagents.policies.policy import Policy
+from pydrlagents.policies.randompolicy import RandomPolicy
+
 
 @gin.configurable
 class EpsGreedyPolicy(Policy):

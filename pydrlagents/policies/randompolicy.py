@@ -1,5 +1,5 @@
 import numpy as np
-from policies.policy import Policy
+from pydrlagents.policies.policy import Policy
 
 
 class RandomPolicy(Policy):
