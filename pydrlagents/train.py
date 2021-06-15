@@ -21,8 +21,6 @@ def train_agent(n_episodes=1000, batch_size=64, learning_rate=0.001, steps_to_tr
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    gin.parse_config_file('config/cartpole0.gin')
-    gin.parse_config_file('config/cartpole1.gin')
     buffer = PrioritizedBuffer()
     q_net = QNetwork(state_size, action_size)
     optim = Adam(learning_rate=learning_rate)
@@ -71,13 +69,13 @@ def train_agent(n_episodes=1000, batch_size=64, learning_rate=0.001, steps_to_tr
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description="Script for training flatland agents")
-    parser.add_argument('-c', '--config', nargs='+', help='path to gin config file, ', required=True)
+    parser = ArgumentParser(description="Script for training agents")
+    parser.add_argument('-c', '--config', nargs='+', help='path to gin config file(s) ', required=True)
     args = parser.parse_args()
     results = []
     for cfg_file in args.config:
         gin.parse_config_file(cfg_file)
-        info = train_agent()
+        info = train_agent(n_episodes=500)
         results.append((cfg_file, info))
     ncols = 2
     nrows = len(args.config)//2
