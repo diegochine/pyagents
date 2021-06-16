@@ -4,7 +4,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="PyDRLAgents",
+    name="pyagents",
     version="0.0.1",
     author="Chinellato Diego & Campardo Giorgia",
     author_email="chine.diego@gmail.com",
@@ -19,7 +19,6 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
-    package_dir={"": "pyagents"},
-    packages=setuptools.find_packages(where="pyagents"),
+    packages=["pyagents"],
     python_requires=">=3.6",
 )
