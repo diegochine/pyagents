@@ -1,9 +1,9 @@
-import setuptools
+from setuptools import setup, find_packages
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-setuptools.setup(
+setup(
     name="pyagents",
     version="0.0.1",
     author="Chinellato Diego & Campardo Giorgia",
@@ -11,7 +11,7 @@ setuptools.setup(
     description="Implementations of DRL algorithms",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/diegochine/deep-reinforcement-learning",
+    url="https://github.com/diegochine/pyagents",
     project_urls={
         "Bug Tracker": "https://github.com/diegochine/deep-reinforcement-learning/issues",
     },
@@ -19,6 +19,6 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
-    packages=["pyagents"],
+    packages=find_packages('.'),
     python_requires=">=3.6",
 )
