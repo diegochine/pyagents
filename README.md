@@ -1,6 +1,4 @@
-# deep-reinforcement-learning
-
-Implementations of DRL algorithms. 
+# PyAgents: a library of DRL algorithms
 
 ## Agents
 
