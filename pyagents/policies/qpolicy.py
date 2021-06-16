@@ -1,5 +1,5 @@
 import numpy as np
-from pydrlagents.policies.policy import Policy
+from pyagents.policies.policy import Policy
 
 
 class QPolicy(Policy):

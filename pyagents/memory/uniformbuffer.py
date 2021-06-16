@@ -4,7 +4,7 @@ from collections import deque
 
 import numpy as np
 
-from pydrlagents.memory.buffer import Buffer
+from pyagents.memory.buffer import Buffer
 
 
 @gin.configurable

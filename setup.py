@@ -19,7 +19,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
-    package_dir={"": "pydrlagents"},
-    packages=setuptools.find_packages(where="pydrlagents"),
+    package_dir={"": "pyagents"},
+    packages=setuptools.find_packages(where="pyagents"),
     python_requires=">=3.6",
 )

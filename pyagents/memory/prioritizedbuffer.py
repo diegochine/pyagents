@@ -1,7 +1,7 @@
 import numpy as np
 import gin
 from collections import deque
-from pydrlagents.memory.buffer import Buffer
+from pyagents.memory.buffer import Buffer
 
 
 @gin.configurable

@@ -1,7 +1,7 @@
 import gin
 import numpy as np
-from pydrlagents.policies.policy import Policy
-from pydrlagents.policies.randompolicy import RandomPolicy
+from pyagents.policies.policy import Policy
+from pyagents.policies.randompolicy import RandomPolicy
 
 
 @gin.configurable

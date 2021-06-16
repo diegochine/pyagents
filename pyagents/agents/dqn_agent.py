@@ -6,11 +6,11 @@ import json
 import numpy as np
 import tensorflow as tf
 from keras.losses import Huber, mean_squared_error
-from pydrlagents.utils import json_utils, types
-from pydrlagents.agents import Agent
-from pydrlagents.memory import Buffer, UniformBuffer, load_memories
-from pydrlagents.networks import QNetwork
-from pydrlagents.policies import QPolicy, EpsGreedyPolicy
+from pyagents.utils import json_utils, types
+from pyagents.agents import Agent
+from pyagents.memory import Buffer, UniformBuffer, load_memories
+from pyagents.networks import QNetwork
+from pyagents.policies import QPolicy, EpsGreedyPolicy
 from copy import deepcopy
 
 
