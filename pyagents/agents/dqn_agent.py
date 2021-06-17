@@ -220,7 +220,7 @@ class DQNAgent(Agent):
         net_weights = [weights[()] for name, weights in net_weights_group.items()]
         f.close()
         q_net = QNetwork.from_config(net_config)
-        q_net(tf.ones((1, net_config['state_shape'])))
+        q_net(tf.ones((1, *net_config['state_shape'])))
         q_net.set_weights(net_weights)
         buffer = load_memories(path)
         agent_config.update({'state_shape': net_config['state_shape'],
