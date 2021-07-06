@@ -1,6 +1,7 @@
 import gin
 import tensorflow as tf
 
+from pyagents.layers.qlayer import QLayer
 from pyagents.networks.network import Network
 from pyagents.networks.encoding_network import EncodingNetwork
 
@@ -10,7 +11,7 @@ class QNetwork(Network):
 
     def __init__(self, state_shape, action_shape, preprocessing_layers=None,
                  conv_layer_params=None, fc_layer_params=(128, 64), activation='relu',
-                 name='QNetwork', trainable=True, dtype=tf.float32):
+                 name='QNetwork', trainable=True, dtype=tf.float32, dueling=True):
         super().__init__(name=name, trainable=trainable, dtype=dtype)
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
@@ -19,21 +20,17 @@ class QNetwork(Network):
                         'conv_layer_params': conv_layer_params if conv_layer_params else [],
                         'fc_layer_params': fc_layer_params if fc_layer_params else [],
                         'activation': activation,
+                        'dueling': dueling,
                         'name': name}
         self._encoder = EncodingNetwork(
             state_shape,
             preprocessing_layers=preprocessing_layers,
             conv_layer_params=conv_layer_params,
-            fc_layer_params=fc_layer_params,
+            fc_layer_params=fc_layer_params[:-1],
             activation=activation,
             name=name
         )
-        self._q_layer = tf.keras.layers.Dense(
-            action_shape,
-            activation=None,
-            kernel_initializer=tf.random_uniform_initializer(-0.05, 0.05),
-            bias_initializer=tf.constant_initializer(-0.1)
-        )
+        self._q_layer = QLayer(action_shape, units=fc_layer_params[-1], dueling=dueling)
 
     def call(self, inputs, training=False, mask=None):
         state = self._encoder(inputs)

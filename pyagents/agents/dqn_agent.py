@@ -192,7 +192,7 @@ class DQNAgent(Agent):
                 net_weights_group.create_dataset(f'net_weights{i}', data=lay_weights)
 
             if include_optimizer and self._optimizer:
-                pass
+                raise NotImplementedError()
                 # TODO save_optimizer_weights_to_hdf5_group(f, model.optimizer)
 
             f.flush()
