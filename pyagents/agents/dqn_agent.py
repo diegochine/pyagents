@@ -10,7 +10,7 @@ from pyagents.utils import json_utils, types
 from pyagents.agents import Agent
 from pyagents.memory import Buffer, UniformBuffer, load_memories
 from pyagents.networks import QNetwork
-from pyagents.policies import QPolicy, EpsGreedyPolicy
+from pyagents.policies import QPolicy, EpsGreedyPolicy, Policy
 from copy import deepcopy
 
 
@@ -23,6 +23,7 @@ class DQNAgent(Agent):
                  action_shape: tuple,
                  q_network: QNetwork,
                  optimizer: tf.keras.optimizers.Optimizer,
+                 policy: Policy = None,
                  gamma: types.Float = 0.5,
                  epsilon: types.Float = 0.1,
                  epsilon_decay: types.Float = 0.98,
@@ -63,7 +64,8 @@ class DQNAgent(Agent):
             'name': self._name
         }
 
-        policy = QPolicy(self._state_shape, self._action_shape, self._online_q_network)
+        if policy is None:
+            policy = QPolicy(self._state_shape, self._action_shape, self._online_q_network)
         self._policy = EpsGreedyPolicy(policy, epsilon, epsilon_decay, epsilon_min)
 
     @property
