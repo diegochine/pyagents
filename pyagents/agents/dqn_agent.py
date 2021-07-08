@@ -189,7 +189,7 @@ class DQNAgent(Agent):
 
             net_weights_group = f.create_group('net_weights')
             for i, lay_weights in enumerate(net_weights):
-                net_weights_group.create_dataset(f'net_weights{i}', data=lay_weights)
+                net_weights_group.create_dataset(f'net_weights{i:0>3}', data=lay_weights)
 
             if include_optimizer and self._optimizer:
                 raise NotImplementedError()
@@ -217,8 +217,10 @@ class DQNAgent(Agent):
             else:
                 net_config[k] = v
         net_weights_group = f['net_weights']
-        net_weights = [weights[()] for name, weights in net_weights_group.items()]
+        net_weights_group = {name: weights[...] for name, weights in net_weights_group.items()}
+        net_weights = [net_weights_group[f'net_weights{i:0>3}'] for i in range(len(net_weights_group))]
         f.close()
+
         q_net = QNetwork.from_config(net_config)
         q_net(tf.ones((1, *net_config['state_shape'])))
         q_net.set_weights(net_weights)
