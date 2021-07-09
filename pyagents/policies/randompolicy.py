@@ -11,4 +11,4 @@ class RandomPolicy(Policy):
         return np.random.randint(self._action_shape)
 
     def _distribution(self, obs):
-        raise NotImplementedError()
+        return np.array([1/self.action_shape] * self.action_shape)

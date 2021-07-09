@@ -29,4 +29,7 @@ class EpsGreedyPolicy(Policy):
             return self._policy.act(obs)
 
     def _distribution(self, obs):
-        raise NotImplementedError()
+        if np.random.rand() <= self._epsilon:
+            return self._random_policy.distribution(obs)
+        else:
+            return self._policy.distribution(obs)

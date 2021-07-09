@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 from pyagents.policies.policy import Policy
 
 
@@ -13,4 +14,5 @@ class QPolicy(Policy):
         return np.argmax(qvals)
 
     def _distribution(self, obs):
-        raise NotImplementedError()
+        qvals = self._q_network(obs.reshape(1, *obs.shape))
+        return qvals / tf.reduce_sum(qvals)
