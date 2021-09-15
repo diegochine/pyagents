@@ -2,7 +2,7 @@ import os
 import numpy as np
 from matplotlib import pyplot as plt
 import gin
-from keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adam
 
 
 @gin.configurable
