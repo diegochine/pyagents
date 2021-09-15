@@ -121,7 +121,7 @@ class DQNAgent(Agent):
 
     def _train(self, batch_size):
         self._memory.commit_ltmemory()
-        if self._training:
+        if self._training and len(self._memory) > batch_size:
             memories, indexes, is_weights = self._memory.sample(batch_size, vectorizing_fn=self._minibatch_to_tf)
             with tf.GradientTape() as tape:
                 td_loss = self._loss(memories)
