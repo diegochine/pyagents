@@ -30,6 +30,10 @@ class Buffer(ABC):
     def sample(self, batch_size, vectorizing_fn):
         pass
 
+    @abstractmethod
+    def get_config(self):
+        pass
+
     def set_save_dir(self, path):
         self._save_dir = path
 

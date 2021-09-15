@@ -80,6 +80,9 @@ class DQNAgent(Agent):
     def epsilon(self):
         return self._policy.epsilon
 
+    def get_config(self):
+        return self._config
+
     def act(self, state):
         return self._policy.act(state)
 

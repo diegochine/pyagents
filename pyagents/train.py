@@ -5,13 +5,13 @@ from argparse import ArgumentParser
 from agents import DQNAgent
 from networks import QNetwork
 from memory import PrioritizedBuffer
-from keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adam
 import gin
 import matplotlib.pyplot as plt
 
 
 @gin.configurable
-def train_agent(n_episodes=1000, batch_size=64, learning_rate=0.001, steps_to_train=100,
+def train_agent(n_episodes=1000, batch_size=64, learning_rate=0.001, steps_to_train=5,
                 max_steps=500, min_memories=5000, output_dir="./output/"):
 
     env = gym.make('CartPole-v1')

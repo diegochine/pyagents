@@ -26,9 +26,15 @@ class PrioritizedBuffer(Buffer):
         elif isinstance(beta, tuple):
             self._beta, self._beta_max, steps = beta
             self._beta_inc = (self._beta_max - self._beta) / steps
+        self._config = {'size_long': size_long, 'size_short': size_short,
+                        'eps_buffer': eps, 'alpha': alpha, 'beta': self._beta,
+                        'beta_max': self._beta_max, 'beta_inc': self._beta_inc}
 
     def __len__(self):
         return len(self.ltmemory)
+
+    def get_config(self):
+        return self._config
 
     def commit_stmemory(self, fragment, data_augmentation=None):
         """

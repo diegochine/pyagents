@@ -17,9 +17,13 @@ class UniformBuffer(Buffer):
         else:
             self.ltmemory = deque(maxlen=size_long)
         self.stmemory = deque(maxlen=size_short)
+        self._config = {'size_long': size_long, 'size_short': size_short}
 
     def __len__(self):
         return len(self.ltmemory)
+
+    def get_config(self):
+        return self._config
 
     def commit_stmemory(self, fragment, data_augmentation=None):
         """
