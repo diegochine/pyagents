@@ -80,11 +80,14 @@ class DQNAgent(Agent):
     def epsilon(self):
         return self._policy.epsilon
 
+    def toggle_training(self, training=None):
+        self._training = ~self._training if training is None else training
+
     def get_config(self):
         return self._config
 
-    def act(self, state):
-        return self._policy.act(state)
+    def act(self, state, mask=None):
+        return self._policy.act(state, mask=mask, training=self._training)
 
     def remember(self, state, action, reward, next_state, done):
         """

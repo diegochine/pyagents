@@ -22,11 +22,11 @@ class EpsGreedyPolicy(Policy):
     def epsilon(self):
         return self._epsilon
 
-    def _act(self, obs):
-        if np.random.rand() <= self._epsilon:
-            return self._random_policy.act(obs)
+    def _act(self, obs, mask=None, training=True):
+        if training and np.random.rand() <= self._epsilon:
+            return self._random_policy.act(obs, mask=mask, training=training)
         else:
-            return self._policy.act(obs)
+            return self._policy.act(obs, mask=mask, training=training)
 
     def _distribution(self, obs):
         if np.random.rand() <= self._epsilon:

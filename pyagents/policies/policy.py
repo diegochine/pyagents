@@ -8,8 +8,8 @@ class Policy(ABC):
         self._state_shape = state_shape
         self._action_shape = action_shape
 
-    def act(self, obs, **kwargs):
-        return self._act(obs, **kwargs)
+    def act(self, obs, mask=None, training=True):
+        return self._act(obs, mask=mask, training=training)
 
     def distribution(self, obs):
         return self._distribution(obs)

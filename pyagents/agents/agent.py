@@ -27,7 +27,7 @@ class Agent(tf.Module, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def act(self, state):
+    def act(self, state, mask=None):
         """Returns the best action in the state according to current policy"""
 
     def _loss(self, memories):
