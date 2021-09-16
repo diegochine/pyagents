@@ -81,7 +81,7 @@ class DQNAgent(Agent):
         return self._policy.epsilon
 
     def toggle_training(self, training=None):
-        self._training = ~self._training if training is None else training
+        self._training = not self._training if training is None else training
 
     def get_config(self):
         return self._config
