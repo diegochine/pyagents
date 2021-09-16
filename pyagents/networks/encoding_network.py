@@ -30,7 +30,7 @@ def _copy_layer(layer):
 @gin.configurable
 class EncodingNetwork(Network):
 
-    def __init__(self, state_shape, preprocessing_layers=None,
+    def __init__(self, state_shape, preprocessing_layers=None, dropout_params=None,
                  conv_layer_params=None, fc_layer_params=None, activation='relu', dtype=tf.float32,
                  name='EncodingNetwork', conv_type='2d'):
         super().__init__(name=name)
@@ -73,7 +73,11 @@ class EncodingNetwork(Network):
         layers.append(tf.keras.layers.Flatten())
 
         if fc_layer_params:
-            for num_units in fc_layer_params:
+            if dropout_params is not None:
+                assert len(fc_layer_params) == len(dropout_params)
+            else:
+                dropout_params = [None] * len(fc_layer_params)
+            for num_units, dropout in zip(fc_layer_params, dropout_params):
                 kernal_regularizer = None  # if necessary sholud have wheight decay param as in tf
                 layers.append(
                     tf.keras.layers.Dense(
@@ -82,6 +86,8 @@ class EncodingNetwork(Network):
                         kernel_initializer=kernel_initializer,
                         kernel_regularizer=kernal_regularizer,
                         dtype=dtype))
+                if dropout is not None:
+                    layers.append(tf.keras.layers.Dropout(rate=dropout))
 
         # Pull out the nest structure of the preprocessing layers. This avoids
         # saving the original kwarg layers as a class attribute which Keras would
@@ -92,6 +98,7 @@ class EncodingNetwork(Network):
                         'preprocessing_layers': [lay.get_config() for lay in self._preprocessing_layers] if preprocessing_layers else [],
                         'conv_layer_params': conv_layer_params if conv_layer_params else [],
                         'fc_layer_params': fc_layer_params if conv_layer_params else [],
+                        'dropout_params': dropout_params if dropout_params else [],
                         'activation': activation,
                         'dtype': dtype,
                         'name': name,

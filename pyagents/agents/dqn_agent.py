@@ -66,7 +66,9 @@ class DQNAgent(Agent):
 
         if policy is None:
             policy = QPolicy(self._state_shape, self._action_shape, self._online_q_network)
-        self._policy = EpsGreedyPolicy(policy, epsilon, epsilon_decay, epsilon_min)
+            self._policy: EpsGreedyPolicy = EpsGreedyPolicy(policy, epsilon, epsilon_decay, epsilon_min)
+        else:
+            self._policy = policy
 
     @property
     def memory_len(self):
