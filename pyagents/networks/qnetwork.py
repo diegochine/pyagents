@@ -23,6 +23,8 @@ class QNetwork(Network):
                         'activation': activation,
                         'dueling': dueling,
                         'name': name}
+        if dropout_params is None:
+            dropout_params = [None, None]
         self._encoder = EncodingNetwork(
             state_shape,
             preprocessing_layers=preprocessing_layers,
@@ -32,9 +34,7 @@ class QNetwork(Network):
             activation=activation,
             name=name
         )
-        if dropout_params is not None:
-            dropout_params = dropout_params[-1]
-        self._q_layer = QLayer(action_shape, units=fc_layer_params[-1], dropout=dropout_params, dueling=dueling)
+        self._q_layer = QLayer(action_shape, units=fc_layer_params[-1], dropout=dropout_params[-1], dueling=dueling)
 
     def call(self, inputs, training=False, mask=None):
         state = self._encoder(inputs, training=training)
