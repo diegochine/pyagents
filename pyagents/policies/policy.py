@@ -14,6 +14,18 @@ class Policy(ABC):
     def distribution(self, obs):
         return self._distribution(obs)
 
+    def get(self, attr):
+        if hasattr(self, attr):
+            return getattr(self, attr)
+        else:
+            raise AttributeError(f'Attribute {attr} not found')
+
+    def set(self, attr, val):
+        if hasattr(self, attr):
+            setattr(self, attr, val)
+        else:
+            raise AttributeError(f'Attribute {attr} not found')
+
     @property
     def state_shape(self):
         return self._state_shape

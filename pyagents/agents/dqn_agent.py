@@ -79,8 +79,8 @@ class DQNAgent(Agent):
         return self._state_shape
 
     @property
-    def epsilon(self):
-        return self._policy.epsilon
+    def policy(self):
+        return self._policy
 
     def toggle_training(self, training=None):
         self._training = not self._training if training is None else training
