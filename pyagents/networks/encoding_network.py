@@ -3,30 +3,6 @@ import tensorflow as tf
 from pyagents.networks.network import Network
 
 
-def _copy_layer(layer):
-    """Create a copy of a Keras layer with identical parameters.
-  The new layer will not share weights with the old one.
-  Args:
-    layer: An instance of `tf.keras.layers.Layer`.
-  Returns:
-    A new keras layer.
-  Raises:
-    TypeError: If `layer` is not a keras layer.
-    ValueError: If `layer` cannot be correctly cloned.
-  """
-    if not isinstance(layer, tf.keras.layers.Layer):
-        raise TypeError('layer is not a keras layer: %s' % str(layer))
-
-    if layer.built:
-        logging.warning(
-            'Beware: Copying a layer that has already been built: \'%s\'.  '
-            'This can lead to subtle bugs because the original layer\'s weights '
-            'will not be used in the copy.', layer.name)
-    # Get a fresh copy so we don't modify an incoming layer in place.  Weights
-    # will not be shared.
-    return type(layer).from_config(layer.get_config())
-
-
 @gin.configurable
 class EncodingNetwork(Network):
 
@@ -78,13 +54,13 @@ class EncodingNetwork(Network):
             else:
                 dropout_params = [None] * len(fc_layer_params)
             for num_units, dropout in zip(fc_layer_params, dropout_params):
-                kernal_regularizer = None  # if necessary sholud have wheight decay param as in tf
+                kernel_regularizer = None  # if necessary sholud have wheight decay param as in tf
                 layers.append(
                     tf.keras.layers.Dense(
                         num_units,
                         activation=activation,
                         kernel_initializer=kernel_initializer,
-                        kernel_regularizer=kernal_regularizer,
+                        kernel_regularizer=kernel_regularizer,
                         dtype=dtype))
                 if dropout is not None:
                     layers.append(tf.keras.layers.Dropout(rate=dropout))

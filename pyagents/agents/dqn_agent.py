@@ -35,7 +35,7 @@ class DQNAgent(Agent):
                  name: str = 'DQNAgent',
                  training: bool = True,
                  save_dir: str = './output'):
-        super(DQNAgent, self).__init__(state_shape, action_shape, name=name)
+        super(DQNAgent, self).__init__(state_shape, action_shape, training=training, name=name)
         self._save_dir = os.path.join(save_dir, name)
         if not os.path.isdir(self._save_dir):
             os.makedirs(self._save_dir)
@@ -53,7 +53,6 @@ class DQNAgent(Agent):
         self._td_errors_loss_fn = mean_squared_error  # Huber(reduction=tf.keras.losses.Reduction.NONE)
         self._train_step = tf.Variable(0, trainable=False, name="train step counter")
         self._ddqn = ddqn
-        self._training = training
         self._name = name
 
         self._config = {
@@ -74,22 +73,8 @@ class DQNAgent(Agent):
     def memory_len(self):
         return len(self._memory.ltmemory)
 
-    @property
-    def state_shape(self):
-        return self._state_shape
-
-    @property
-    def policy(self):
-        return self._policy
-
-    def toggle_training(self, training=None):
-        self._training = not self._training if training is None else training
-
     def get_config(self):
         return self._config
-
-    def act(self, state, mask=None):
-        return self._policy.act(state, mask=mask, training=self._training)
 
     def remember(self, state, action, reward, next_state, done):
         """

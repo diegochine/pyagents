@@ -15,10 +15,26 @@ class Agent(tf.Module, abc.ABC):
       some internal network
     """
 
-    def __init__(self, state_shape, action_shape, name='Agent'):
+    def __init__(self, state_shape, action_shape, training, name='Agent'):
         super(Agent, self).__init__(name=name)
         self._state_shape = state_shape
         self._action_shape = action_shape
+        self._training = training
+
+    @property
+    def state_shape(self):
+        return self._state_shape
+
+    @property
+    def action_shape(self):
+        return self._action_shape
+
+    @property
+    def policy(self):
+        return self._policy
+
+    def toggle_training(self, training=None):
+        self._training = not self._training if training is None else training
 
     def _initialize(self):
         pass
@@ -26,9 +42,9 @@ class Agent(tf.Module, abc.ABC):
     def initialize(self):
         pass
 
-    @abc.abstractmethod
     def act(self, state, mask=None):
         """Returns the best action in the state according to current policy"""
+        return self._policy.act(state, mask=mask, training=self._training)
 
     def _loss(self, memories):
         """Computes loss"""
@@ -38,7 +54,7 @@ class Agent(tf.Module, abc.ABC):
     def _train(self, batch_size):
         pass
 
-    def train(self, batch_size):
+    def train(self, batch_size=None):
         return self._train(batch_size)
 
     @abc.abstractmethod
