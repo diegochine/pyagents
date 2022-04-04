@@ -2,12 +2,11 @@ import os
 import numpy as np
 import gym
 from argparse import ArgumentParser
-from pyagents.agents import DQNAgent, A2C
+from pyagents.agents import DQNAgent
 from pyagents.networks import QNetwork, ActorNetwork, ValueNetwork
 from pyagents.memory import PrioritizedBuffer
 from tensorflow.keras.optimizers import Adam
 import gin
-import matplotlib.pyplot as plt
 
 
 @gin.configurable
@@ -54,11 +53,11 @@ def train_dqn_agent(n_episodes=1000, batch_size=64, learning_rate=0.001, steps_t
         scores.append(step)
         this_episode_score = np.mean(scores[-10:])
         movavg100.append(this_episode_score)
-        eps_history.append(player.epsilon)
+        eps_history.append(player.policy.epsilon)
         if episode % 10 == 0:
             print(f'EPISODE: {episode:4d}/{n_episodes:4d}, '
                   f'SCORE: {this_episode_score:3.0f}, '
-                  f'EPS: {player.epsilon:.2f}')
+                  f'EPS: {player.policy.epsilon:.2f}')
 
         player.train(batch_size)
 

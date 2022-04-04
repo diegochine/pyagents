@@ -131,3 +131,5 @@ dmypy.json
 output/
 logs/
 memories/
+cfg/
+*.gin
