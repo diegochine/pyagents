@@ -1,4 +1,5 @@
 import os
+from math import log
 from typing import Optional
 import gin
 import h5py
@@ -32,9 +33,11 @@ class DQNAgent(Agent):
                  tau: types.Float = 1.0,
                  ddqn: bool = True,
                  buffer: Optional[Buffer] = None,
+                 log_dict: dict = None,
                  name: str = 'DQNAgent',
                  training: bool = True,
-                 save_dir: str = './output'):
+                 save_dir: str = './output',
+                 wandb_params: Optional[dict] = None):
         super(DQNAgent, self).__init__(state_shape, action_shape, training=training, name=name)
         self._save_dir = os.path.join(save_dir, name)
         if not os.path.isdir(self._save_dir):
@@ -55,13 +58,15 @@ class DQNAgent(Agent):
         self._ddqn = ddqn
         self._name = name
 
-        self._config = {
+        self.config.update({
             'gamma': self._gamma,
             'target_update_period': self._target_update_period,
             'tau': self._tau,
             'ddqn': self._ddqn,
-            'name': self._name
-        }
+            **{f'q_net/{k}': v for k, v in self._online_q_network.get_config().items()},
+        })
+        if log_dict is not None:
+            self.config.update(**log_dict)
 
         if policy is None:
             policy = QPolicy(self._state_shape, self._action_shape, self._online_q_network)
@@ -69,12 +74,15 @@ class DQNAgent(Agent):
         else:
             self._policy = policy
 
+        if wandb_params:
+            self._init_logger(wandb_params)
+
+    def _wandb_define_metrics(self):
+        wandb.define_metric('loss', step_metric="train_step", summary="min")
+
     @property
     def memory_len(self):
         return len(self._memory.ltmemory)
-
-    def get_config(self):
-        return self._config
 
     def remember(self, state, action, reward, next_state, done):
         """
@@ -173,7 +181,8 @@ class DQNAgent(Agent):
         try:
             agent_group = f.create_group('agent')
             for k, v in self._config.items():
-                agent_group.attrs[k] = v
+                if not k.startswith('q_net'):
+                    agent_group.attrs[k] = v
 
             net_config_group = f.create_group('net_config')
             for k, v in net_config.items():

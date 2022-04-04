@@ -2,8 +2,8 @@ import gin
 import tensorflow as tf
 from pyagents.networks.network import Network
 from pyagents.networks.encoding_network import EncodingNetwork
-from pyagents.layers import GaussianLayer, DirichletLayer
-from pyagents.policies import GaussianPolicy, DirichletPolicy
+from pyagents.layers import GaussianLayer, DirichletLayer, SoftmaxLayer
+from pyagents.policies import GaussianPolicy, DirichletPolicy, SoftmaxPolicy
 
 
 @gin.configurable
@@ -15,7 +15,7 @@ class ActorNetwork(Network):
         super(ActorNetwork, self).__init__(name, trainable, dtype)
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
-                        'preprocessing_layers': [lay.get_config() for lay in preprocessing_layers]
+                        'preprocessing_layers': [lay.config() for lay in preprocessing_layers]
                         if preprocessing_layers else [],
                         'conv_layer_params': conv_layer_params if conv_layer_params else [],
                         'fc_layer_params': fc_layer_params if fc_layer_params else [],
@@ -38,6 +38,8 @@ class ActorNetwork(Network):
             self._out_layer = GaussianLayer(state_shape, action_shape)
         elif distribution == 'beta':
             self._out_layer = DirichletLayer(state_shape, action_shape)
+        elif distribution == 'softmax':
+            self._out_layer = SoftmaxLayer(state_shape, action_shape)
 
     @property
     def policy(self):
@@ -45,6 +47,13 @@ class ActorNetwork(Network):
             return GaussianPolicy(self._config['state_shape'], self._config['action_shape'], self)
         elif self._out_distribution == 'beta':
             return DirichletPolicy(self._config['state_shape'], self._config['action_shape'], self, bounds=(-2, 2)) # TODO improve this hardcoded bounds
+        elif self._out_distribution == 'softmax':
+            return SoftmaxPolicy(self._config['state_shape'], self._config['action_shape'], self)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(self._config)
+        return config
 
     def call(self, inputs, training=True, mask=None):
         state = self._encoder(inputs, training=training)

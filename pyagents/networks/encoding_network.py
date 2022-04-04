@@ -71,7 +71,7 @@ class EncodingNetwork(Network):
         self._postprocessing_layers = layers
         self.built = True  # Allow access to self.variables
         self._config = {'state_shape': state_shape,
-                        'preprocessing_layers': [lay.get_config() for lay in self._preprocessing_layers] if preprocessing_layers else [],
+                        'preprocessing_layers': [lay.config() for lay in self._preprocessing_layers] if preprocessing_layers else [],
                         'conv_layer_params': conv_layer_params if conv_layer_params else [],
                         'fc_layer_params': fc_layer_params if conv_layer_params else [],
                         'dropout_params': dropout_params if dropout_params else [],

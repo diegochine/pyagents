@@ -15,7 +15,7 @@ class QNetwork(Network):
         super().__init__(name=name, trainable=trainable, dtype=dtype)
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
-                        'preprocessing_layers': [lay.get_config() for lay in preprocessing_layers]
+                        'preprocessing_layers': [lay.config() for lay in preprocessing_layers]
                         if preprocessing_layers else [],
                         'conv_layer_params': conv_layer_params if conv_layer_params else [],
                         'fc_layer_params': fc_layer_params if fc_layer_params else [],
@@ -42,7 +42,7 @@ class QNetwork(Network):
         return q_values
 
     def get_config(self):
-        config = super(QNetwork, self).get_config()
+        config = super().get_config()
         config.update(self._config)
         return config
 
