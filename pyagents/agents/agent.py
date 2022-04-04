@@ -85,7 +85,17 @@ class Agent(tf.Module, abc.ABC):
         pass
 
     def train(self, batch_size=None):
-        return self._train(batch_size)
+        losses_dict = self._train(batch_size)
+        if self._wandb_run is not None:
+            self._log(**losses_dict)
+        return losses_dict
+
+    @abc.abstractmethod
+    def _wandb_define_metrics(self):
+        pass
+
+    def _agent_group(self, f):
+        pass
 
     @abc.abstractmethod
     def save(self, ver):

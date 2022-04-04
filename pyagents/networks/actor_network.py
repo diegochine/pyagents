@@ -31,7 +31,6 @@ class ActorNetwork(Network):
             fc_layer_params=fc_layer_params,
             dropout_params=dropout_params,
             activation=activation,
-            name=name
         )
         self._out_distribution = distribution
         if distribution == 'gaussian':

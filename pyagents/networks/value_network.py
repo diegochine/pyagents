@@ -29,10 +29,14 @@ class ValueNetwork(Network):
             fc_layer_params=fc_layer_params,
             dropout_params=dropout_params,
             activation=activation,
-            name=name
         )
         self._value_head = tf.keras.layers.Dense(1)
         self.build((None, state_shape))
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(self._config)
+        return config
 
     def call(self, inputs, training=True, mask=None):
         state = self._encoder(inputs, training=training)

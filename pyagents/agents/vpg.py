@@ -5,7 +5,7 @@ import h5py
 import json
 import numpy as np
 import tensorflow as tf
-from keras.losses import Huber, mean_squared_error
+import wandb
 from pyagents.agents import Agent
 from pyagents.networks import ActorNetwork, ValueNetwork
 from pyagents.policies import Policy
@@ -106,6 +106,7 @@ class VPG(Agent):
         return policy_loss, critic_loss, entropy_loss
 
     def _train(self, batch_size=None):
+        # convert inputs to tf tensors and compute returns
         states = self._trajectory['states']
         actions = self._trajectory['actions']
         rewards = self._trajectory['rewards']
@@ -134,6 +135,15 @@ class VPG(Agent):
         self._critic_opt.apply_gradients(critic_grads_and_vars)
         del tape
         self.clear_memory()
+        self._train_step += 1
+
+        # logging
+        if self.is_logging:
+            actor_grads_log = {f'actor/{".".join(var.name.split("/")[1:])}': grad.numpy()
+                               for grad, var in actor_grads_and_vars}
+            critic_grads_log = {f'critic/{".".join(var.name.split("/")[1:])}': grad.numpy()
+                                for grad, var in critic_grads_and_vars}
+            self._log(do_log_step=False, prefix='gradients', **actor_grads_log, **critic_grads_log)
 
         return {'policy_loss': float(policy_loss),
                 'critic_loss': float(critic_loss),

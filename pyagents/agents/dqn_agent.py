@@ -6,6 +6,7 @@ import h5py
 import json
 import numpy as np
 import tensorflow as tf
+import wandb
 from keras.losses import Huber, mean_squared_error
 from pyagents.utils import json_utils, types
 from pyagents.agents import Agent
@@ -17,6 +18,7 @@ from copy import deepcopy
 
 @gin.configurable
 class DQNAgent(Agent):
+
     W_Q_NET = 'qnet.hdf5'
 
     def __init__(self,
@@ -136,7 +138,7 @@ class DQNAgent(Agent):
             # the following only for epsgreedy policies
             # TODO make it more generic
             self._policy.update_eps()
-            return loss
+            return {'loss': float(loss)}
 
     def _update_target(self):
         source_variables = self._online_q_network.variables
