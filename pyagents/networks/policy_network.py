@@ -7,12 +7,12 @@ from pyagents.policies import GaussianPolicy, DirichletPolicy, SoftmaxPolicy
 
 
 @gin.configurable
-class ActorNetwork(Network):
+class PolicyNetwork(Network):
 
     def __init__(self, state_shape, action_shape, distribution='beta', preprocessing_layers=None,
                  conv_layer_params=None, fc_layer_params=(64, 64), dropout_params=None, activation='relu',
                  name='ActorNetwork', trainable=True, dtype=tf.float32):
-        super(ActorNetwork, self).__init__(name, trainable, dtype)
+        super(PolicyNetwork, self).__init__(name, trainable, dtype)
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
                         'preprocessing_layers': [lay.config() for lay in preprocessing_layers]

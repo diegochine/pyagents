@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 import wandb
 
 from pyagents.agents import DQNAgent, VPG, A2C
-from pyagents.networks import QNetwork, ActorNetwork, ValueNetwork
+from pyagents.networks import QNetwork, PolicyNetwork, ValueNetwork
 from pyagents.memory import PrioritizedBuffer
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
@@ -91,16 +91,16 @@ def train_vpg_agent(gamma, n_episodes=1000, max_steps=250,
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    a_net = ActorNetwork(state_size, action_size, distribution='softmax', fc_layer_params=(64,))
-    v_net = ValueNetwork(state_size, action_size, fc_layer_params=(64, ))
+    a_net = PolicyNetwork(state_size, action_size, distribution='softmax', fc_layer_params=(16, 16), dropout_params=(0.1, 0.1))
+    v_net = ValueNetwork(state_size, action_size, fc_layer_params=(16, 16), dropout_params=(0.1, 0.1))
     if schedule:
-        a_lr = tf.keras.optimizers.schedules.PolynomialDecay(actor_learning_rate, 10000, 1e-5)
-        c_lr = tf.keras.optimizers.schedules.PolynomialDecay(critic_learning_rate, 10000, 5e-5)
+        a_lr = tf.keras.optimizers.schedules.PolynomialDecay(actor_learning_rate, 2000, 1e-5)
+        c_lr = tf.keras.optimizers.schedules.PolynomialDecay(critic_learning_rate, 2000, 5e-5)
     else:
         a_lr = actor_learning_rate
         c_lr = critic_learning_rate
-    a_opt = Adam(learning_rate=a_lr, clipnorm=1)
-    v_opt = Adam(learning_rate=c_lr, clipnorm=1)
+    a_opt = Adam(learning_rate=a_lr)
+    v_opt = Adam(learning_rate=c_lr)
     player = VPG(state_size, action_size,
                  actor=a_net, critic=v_net, actor_opt=a_opt, critic_opt=v_opt,
                  gamma=gamma, name='pendulum', wandb_params=wandb_params,
@@ -131,8 +131,8 @@ def train_vpg_agent(gamma, n_episodes=1000, max_steps=250,
 
         losses = player.train()
         if player.is_logging:
-            wandb.log({'score': score, 'episode': episode})
-        scores.append(score)
+            wandb.log({'score': step, 'episode': episode})
+        scores.append(step)
         this_episode_score = np.mean(scores[-10:])
         movavg100.append(this_episode_score)
 
@@ -156,7 +156,7 @@ def train_a2c_agent(n_episodes=1000, learning_rate=1e-3, max_steps=250,
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    a_net = ActorNetwork(state_size, action_size, distribution='softmax', fc_layer_params=(64, ))
+    a_net = PolicyNetwork(state_size, action_size, distribution='softmax', fc_layer_params=(64,))
     v_net = ValueNetwork(state_size, action_size, fc_layer_params=(64, ))
     opt = Adam(learning_rate=learning_rate, clipnorm=10)
     player = A2C(state_size, action_size, actor=a_net, critic=v_net, opt=opt, gamma=0.9,

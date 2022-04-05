@@ -7,7 +7,7 @@ import json
 import numpy as np
 import tensorflow as tf
 from pyagents.agents import Agent
-from pyagents.networks import ActorNetwork, ValueNetwork
+from pyagents.networks import PolicyNetwork, ValueNetwork
 from pyagents.policies import Policy
 from pyagents.utils import types
 
@@ -18,7 +18,7 @@ class A2C(Agent):
     def __init__(self,
                  state_shape: tuple,
                  action_shape: tuple,
-                 actor: ActorNetwork,
+                 actor: PolicyNetwork,
                  critic: ValueNetwork,
                  opt: tf.keras.optimizers.Optimizer,
                  policy: Policy = None,

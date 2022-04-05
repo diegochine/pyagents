@@ -9,7 +9,7 @@ class SoftmaxPolicy(Policy):
         super().__init__(state_shape, action_shape)
         self._actor_network = actor_network
 
-    def _act(self, obs, deterministic=True, mask=None, training=True):
+    def _act(self, obs, deterministic=False, mask=None, training=True):
         probs = self._actor_network(obs.reshape(1, *obs.shape))
         probs = probs.numpy().squeeze(axis=0)
         if deterministic:
@@ -18,8 +18,8 @@ class SoftmaxPolicy(Policy):
             return tfp.distributions.Categorical(probs=probs).sample().numpy()
 
     def entropy(self, output):
-        gaussian = tfp.distributions.Categorical(probs=output)
-        return gaussian.entropy()
+        dist = tfp.distributions.Categorical(probs=output)
+        return dist.entropy()
 
     def log_prob(self, output, actions):
         dist = tfp.distributions.Categorical(probs=output)
