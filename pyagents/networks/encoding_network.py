@@ -47,12 +47,12 @@ class EncodingNetwork(Network):
                         dtype=dtype))
 
         layers.append(tf.keras.layers.Flatten())
-
+        if dropout_params is None or isinstance(dropout_params, float):
+            dropout_params = [dropout_params] * len(fc_layer_params)
+        else:
+            assert isinstance(dropout_params, (tuple, list)), f'unrecognized type for dropout_params {type(dropout_params)} '
         if fc_layer_params:
-            if dropout_params is not None:
-                assert len(fc_layer_params) == len(dropout_params)
-            else:
-                dropout_params = [None] * len(fc_layer_params)
+            assert len(fc_layer_params) == len(dropout_params), f'params length do not match (fc: {len(fc_layer_params)}, dropout: {len(dropout_params)})'
             for num_units, dropout in zip(fc_layer_params, dropout_params):
                 kernel_regularizer = None  # if necessary sholud have wheight decay param as in tf
                 layers.append(

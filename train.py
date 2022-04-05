@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 import wandb
 
 from pyagents.agents import DQNAgent, VPG, A2C
-from pyagents.networks import QNetwork, PolicyNetwork, ValueNetwork
+from pyagents.networks import QNetwork, PolicyNetwork, ValueNetwork, ActorCriticNetwork
 from pyagents.memory import PrioritizedBuffer
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
@@ -82,7 +82,7 @@ def train_dqn_agent(n_episodes=1000, batch_size=64, learning_rate=0.001, steps_t
 
 @gin.configurable
 def train_vpg_agent(gamma, n_episodes=1000, max_steps=250,
-                    actor_learning_rate=1e-4, critic_learning_rate=1e-3, schedule=False,
+                    actor_learning_rate=1e-4, critic_learning_rate=1e-3, schedule=True,
                     output_dir="./output/", wandb_params=None):
     env = gym.make('CartPole-v1')
     state_size = env.observation_space.shape[0]
@@ -92,10 +92,10 @@ def train_vpg_agent(gamma, n_episodes=1000, max_steps=250,
         os.makedirs(output_dir)
 
     a_net = PolicyNetwork(state_size, action_size, distribution='softmax', fc_layer_params=(16, 16), dropout_params=(0.1, 0.1))
-    v_net = ValueNetwork(state_size, action_size, fc_layer_params=(16, 16), dropout_params=(0.1, 0.1))
+    v_net = ValueNetwork(state_size, fc_layer_params=(16, 16), dropout_params=(0.1, 0.1))
     if schedule:
-        a_lr = tf.keras.optimizers.schedules.PolynomialDecay(actor_learning_rate, 2000, 1e-5)
-        c_lr = tf.keras.optimizers.schedules.PolynomialDecay(critic_learning_rate, 2000, 5e-5)
+        a_lr = tf.keras.optimizers.schedules.PolynomialDecay(actor_learning_rate, n_episodes, actor_learning_rate/100)
+        c_lr = tf.keras.optimizers.schedules.PolynomialDecay(critic_learning_rate, n_episodes, critic_learning_rate/100)
     else:
         a_lr = actor_learning_rate
         c_lr = critic_learning_rate
@@ -133,7 +133,7 @@ def train_vpg_agent(gamma, n_episodes=1000, max_steps=250,
         if player.is_logging:
             wandb.log({'score': step, 'episode': episode})
         scores.append(step)
-        this_episode_score = np.mean(scores[-10:])
+        this_episode_score = np.mean(scores[-100:])
         movavg100.append(this_episode_score)
 
         if episode % 1 == 0:
@@ -147,20 +147,24 @@ def train_vpg_agent(gamma, n_episodes=1000, max_steps=250,
 
 
 @gin.configurable
-def train_a2c_agent(n_episodes=1000, learning_rate=1e-3, max_steps=250,
+def train_a2c_agent(gamma, n_episodes=1000, max_steps=250,
+                    learning_rate=1e-3, schedule=True,
                     output_dir="./output/", wandb_params=None):
     env = gym.make('CartPole-v1')
-    state_size = env.observation_space.shape[0]
-    action_size = (env.action_space.n, )
+    state_shape = env.observation_space.shape[0]
+    action_shape = (env.action_space.n, )
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    a_net = PolicyNetwork(state_size, action_size, distribution='softmax', fc_layer_params=(64,))
-    v_net = ValueNetwork(state_size, action_size, fc_layer_params=(64, ))
-    opt = Adam(learning_rate=learning_rate, clipnorm=10)
-    player = A2C(state_size, action_size, actor=a_net, critic=v_net, opt=opt, gamma=0.9,
-                 name='pendulum', wandb_params=wandb_params,
+    ac_net = ActorCriticNetwork(state_shape, action_shape, distribution='softmax')
+    if schedule:
+        lr = tf.keras.optimizers.schedules.PolynomialDecay(learning_rate, n_episodes*10, learning_rate/100)
+    else:
+        lr = learning_rate
+    opt = Adam(learning_rate=lr)
+    player = A2C(state_shape, action_shape, actor_critic=ac_net, opt=opt, gamma=gamma,
+                 name='cartpole', wandb_params=wandb_params,
                  log_dict={'actor_learning_rate': learning_rate, 'critic_learning_rate': learning_rate})
     # player = DQNAgent.load('output/cartpole', ver=5, epsilon=0.01, training=False)
     if player.is_logging:
@@ -175,24 +179,26 @@ def train_a2c_agent(n_episodes=1000, learning_rate=1e-3, max_steps=250,
         step = 0
         score = 0
         done = False
+        losses = None
 
         while not done and step < max_steps:
             # env.render()
             a_t = player.act(s_t)
             s_tp1, r_t, done, info = env.step(a_t)
-            r_t = r_t if not done else -10
+            r_t = r_t if not done else -(200 - step)
             s_tp1 = np.reshape(s_tp1, player.state_shape)
             player.remember(state=s_t, action=a_t, reward=r_t)
             s_t = s_tp1
             step += 1
             score += r_t
-            losses = player.train(s_tp1)
+            loss_info = player.train(done=done, next_state=s_tp1)
+            losses = loss_info if loss_info is not None else losses
 
-        scores.append(score)
-        this_episode_score = np.mean(scores[-10:])
+        scores.append(step)
+        this_episode_score = np.mean(scores[-100:])
         movavg100.append(this_episode_score)
         if player.is_logging:
-            wandb.log({'score': score, 'episode': episode})
+            wandb.log({'score': step, 'episode': episode})
         if episode % 1 == 0:
             if losses is not None:
                 loss_str = f', POLICY LOSS: {losses["policy_loss"]:4.2f}, CRITIC LOSS: {losses["critic_loss"]:5.2f}'
@@ -215,7 +221,7 @@ def reset_random_seed(seed):
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Script for training a sample agent on Gym")
-    parser.add_argument('-a', '--agent', type=str, help='which agent to train, either DQN or vpg')
+    parser.add_argument('-a', '--agent', type=str, help='which agent to train, either DQN, VPG or A2C ')
     parser.add_argument('-c', '--config', type=str, help='path to gin config file', default='')
     args = parser.parse_args()
     if args.config:

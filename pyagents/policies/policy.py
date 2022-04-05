@@ -37,7 +37,3 @@ class Policy(ABC):
     @abstractmethod
     def _act(self, obs, **kwargs):
         pass
-
-    @abstractmethod
-    def _distribution(self, obs):
-        pass

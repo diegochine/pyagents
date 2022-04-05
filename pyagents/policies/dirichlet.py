@@ -12,7 +12,7 @@ class DirichletPolicy(Policy):
 
     def _act(self, obs, deterministic=False, mask=None, training=True):
         alpha = self._actor_network(obs.reshape(1, *obs.shape))
-        alpha = alpha.numpy().squeeze(axis=1)  # FIXME why whis squeeze?
+        alpha = alpha.numpy().squeeze(axis=0)  # FIXME why whis squeeze?
         if deterministic:
             raise NotImplementedError()
         else:

@@ -44,17 +44,17 @@ class VPG(Agent):
         self._critic_loss_fn = tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)
 
         if policy is None:
-            self._policy = self._actor.policy
+            self._policy = self._actor.get_policy()
         else:
             self._policy = policy
 
         self.gamma = gamma
         self._critic_value_coef = critic_value_coef
         self._entropy_coef = entropy_coef
-
-        self._trajectory = {'states': [], 'actions': [], 'rewards': []}
         self._standardize = standardize
         self._gradient_clip_norm = gradient_clip_norm
+
+        self._trajectory = {'states': [], 'actions': [], 'rewards': []}
 
         self.config.update({
             'gamma': self.gamma,

@@ -37,8 +37,7 @@ class Agent(tf.Module, abc.ABC):
     def action_shape(self):
         return self._action_shape
 
-    @property
-    def policy(self):
+    def get_policy(self):
         return self._policy
 
     @property
@@ -81,11 +80,11 @@ class Agent(tf.Module, abc.ABC):
             self._log_dict = {}
 
     @abc.abstractmethod
-    def _train(self, batch_size):
+    def _train(self, batch_size=None, *args, **kwargs):
         pass
 
-    def train(self, batch_size=None):
-        losses_dict = self._train(batch_size)
+    def train(self, batch_size=None, *args, **kwargs):
+        losses_dict = self._train(batch_size, *args, **kwargs)
         if self._wandb_run is not None:
             self._log(**losses_dict)
         return losses_dict
