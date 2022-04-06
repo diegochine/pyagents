@@ -14,6 +14,7 @@ from pyagents.utils import types
 
 @gin.configurable
 class A2C(Agent):
+    """ An agent implementing a synchronous, deterministic version of the A3C algorithm """
 
     def __init__(self,
                  state_shape: tuple,
@@ -26,12 +27,33 @@ class A2C(Agent):
                  n_step_return: int = 1,
                  lam_gae: float = 1,
                  acc_grads_steps: int = 0,
-                 entropy_coef: types.Float = 0.01,
-                 gradient_clip_norm: types.Float = 0.5,
-                 training=True,
+                 entropy_coef: types.Float = 1e-3,
+                 gradient_clip_norm: Optional[types.Float] = 0.5,
+                 training: bool = True,
                  log_dict: dict = None,
-                 name='A2C',
+                 name: str = 'A2C',
                  wandb_params: Optional[dict] = None):
+        """Creates an A2C agent.
+
+        Args:
+            state_shape: Tuple representing the shape of the input space (observations).
+            action_shape: Tuple representing the shape of the action space.
+            actor_critic: A network comprising both a policy and a value function.
+            opt: Optimizer to use for training.
+            policy: (Optional) The policy the agent should follow. Defaults to policy network's policy.
+            gamma: (Optional) Discount factor. Defaults to 0.5.
+            standardize: (Optional) If True, standardizes delta before computing gradient update. Defaults to True.
+            n_step_return: (Optional) Number of steps before computing multi-step returns. Defaults to 1.
+            lam_gae: (Optional) Lambda for Generalized Advantage Estimation. # TODO not implemented
+            acc_grads_steps: (Optional) Simulates A3C asynchronous parallel learning
+              by accumulating gradients over multiple backward passes. Defaults to 0 (no accumulation).
+            entropy_coef: (Optional) Coefficient applied to entropy loss. Defaults to 1e-3.
+            gradient_clip_norm: (Optional) Global norm for gradient clipping, pass None to disable. Defaults to 0.5.
+            training: (Optional) If True, agent is in training phase. Defaults to True.
+            log_dict: (Optional) Additional dict of config parameters that should be logged by WandB. Defaults to None.
+            name: (Optional) Name of the agent.
+            wandb_params: (Optional) Dict of parameters to enable WandB logging. Defaults to None.
+            """
         super(A2C, self).__init__(state_shape, action_shape, training=training, name=name)
 
         self._actor_critic = actor_critic
@@ -51,9 +73,10 @@ class A2C(Agent):
         self._standardize = standardize
         self._gradient_clip_norm = gradient_clip_norm
 
-        self._trajectory = {'states': [], 'actions': [], 'rewards': []}
+        self._trajectory = {'states': [], 'actions': [], 'rewards': [], 'next_states': [], 'dones': []}
         self._steps_last_update = 0
         self._acc_grads_steps = acc_grads_steps
+        self._acc_grads = None
 
         self.config.update({
             'gamma': self.gamma,
@@ -73,19 +96,20 @@ class A2C(Agent):
         wandb.define_metric('entropy_loss', step_metric="train_step", summary="min")
 
     def clear_memory(self):
-        self._trajectory = {'states': [], 'actions': [], 'rewards': []}
-        self._steps_last_update = 0
+        self._trajectory = {'states': [], 'actions': [], 'rewards': [], 'next_states': [], 'dones': []}
 
-    def remember(self, state, action, reward):
+    def remember(self, state, action, reward, next_state, done):
         self._trajectory['states'].append(state)
         self._trajectory['actions'].append(action)
         self._trajectory['rewards'].append(reward)
+        self._trajectory['next_states'].append(next_state)
+        self._trajectory['dones'].append(done)
 
     def _loss(self, memories):
         states, actions, delta = memories
         actor_out, critic_values = self._actor_critic(inputs=states)
         log_prob = self._policy.log_prob(actor_out, actions)
-        entropy_loss = tf.reduce_mean(self._policy.entropy(actor_out))
+        entropy_loss = tf.reduce_sum(self._policy.entropy(actor_out))
         policy_loss = -tf.reduce_sum((log_prob * (delta - tf.stop_gradient(critic_values))))
         critic_loss = self._critic_loss_fn(delta, critic_values)
         return policy_loss, critic_loss, entropy_loss
@@ -106,9 +130,8 @@ class A2C(Agent):
         return tf.convert_to_tensor(returns, dtype=tf.float32)
 
     def _train(self, batch_size=None, *args, **kwargs):
-        if len(self._trajectory['rewards']) == self._n_step_return:  # perform training step
-            assert 'next_state' in kwargs and 'done' in kwargs, 'must pass next state and done flag to train A2C agent'
-            next_state, done = kwargs['next_state'], kwargs['done']
+        done, next_state = self._trajectory['dones'][-1], self._trajectory['next_states'][-1]
+        if done or len(self._trajectory['rewards']) == self._n_step_return:  # perform training step
             states = tf.convert_to_tensor(self._trajectory['states'], dtype=tf.float32)
             actions = tf.convert_to_tensor(self._trajectory['actions'], dtype=tf.float32)
 
@@ -124,9 +147,19 @@ class A2C(Agent):
             grads = tape.gradient(loss, self.trainable_variables)
             if self._gradient_clip_norm is not None:
                 grads, norm = tf.clip_by_global_norm(grads, self._gradient_clip_norm)
+            if self._acc_grads is None:
+                self._acc_grads = np.array(grads)
+            else:
+                self._acc_grads += np.array(grads)
 
-            self._opt.apply_gradients(list(zip(grads, self.trainable_variables)))
-            self._steps_last_update += 1
+            # simulate A3C async update of gradients by multiple parallel learners
+            if self._steps_last_update == self._acc_grads_steps:
+                self._opt.apply_gradients(list(zip(self._acc_grads, self.trainable_variables)))
+                self._steps_last_update = 0
+                self._acc_grads = None
+            else:
+                self._steps_last_update += 1
+
             self.clear_memory()
             return {'policy_loss': float(policy_loss), 'critic_loss': float(critic_loss)}
 

@@ -13,8 +13,8 @@ class EncodingNetwork(Network):
         self._state_shape = state_shape
         self._preprocessing_layers = preprocessing_layers
 
-        kernel_initializer = tf.keras.initializers.VarianceScaling(
-            scale=2.0, mode='fan_in', distribution='truncated_normal')
+        # TODO improve inizialization, allow initizializer to be passed as parameter
+        kernel_initializer = tf.keras.initializers.GlorotNormal()
 
         layers = []
 

@@ -159,7 +159,7 @@ def train_a2c_agent(gamma, n_episodes=1000, max_steps=250,
 
     ac_net = ActorCriticNetwork(state_shape, action_shape, distribution='softmax')
     if schedule:
-        lr = tf.keras.optimizers.schedules.PolynomialDecay(learning_rate, n_episodes*10, learning_rate/100)
+        lr = tf.keras.optimizers.schedules.PolynomialDecay(learning_rate, n_episodes*50, learning_rate/100)
     else:
         lr = learning_rate
     opt = Adam(learning_rate=lr)
@@ -187,11 +187,11 @@ def train_a2c_agent(gamma, n_episodes=1000, max_steps=250,
             s_tp1, r_t, done, info = env.step(a_t)
             r_t = r_t if not done else -(200 - step)
             s_tp1 = np.reshape(s_tp1, player.state_shape)
-            player.remember(state=s_t, action=a_t, reward=r_t)
+            player.remember(state=s_t, action=a_t, reward=r_t, next_state=s_tp1, done=done)
             s_t = s_tp1
             step += 1
             score += r_t
-            loss_info = player.train(done=done, next_state=s_tp1)
+            loss_info = player.train()
             losses = loss_info if loss_info is not None else losses
 
         scores.append(step)
