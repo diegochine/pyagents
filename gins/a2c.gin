@@ -1,0 +1,8 @@
+train_a2c_agent.learning_rate = 1e-3
+train_a2c_agent.gamma = 0.99
+train_a2c_agent.schedule = True
+
+A2C.entropy_coef = 1e-2
+A2C.gradient_clip_norm = 0.5
+A2C.n_step_return = 5
+A2C.acc_grads_steps = 5
