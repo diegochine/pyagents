@@ -119,7 +119,7 @@ class DQNAgent(Agent):
         td_loss = self._td_errors_loss_fn(current_q_values, target_q_values)
         return td_loss
 
-    def _train(self, batch_size):
+    def _train(self, batch_size=128, *args, **kwargs):
         self._memory.commit_ltmemory()
         if self._training and len(self._memory) > batch_size:
             memories, indexes, is_weights = self._memory.sample(batch_size, vectorizing_fn=self._minibatch_to_tf)

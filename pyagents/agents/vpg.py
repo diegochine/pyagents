@@ -14,6 +14,7 @@ from pyagents.utils import types
 
 @gin.configurable
 class VPG(Agent):
+    """An agent implementing the REINFORCE algorithm, also known as Vanilla Policy Gradient."""
 
     def __init__(self,
                  state_shape: tuple,
@@ -33,6 +34,31 @@ class VPG(Agent):
                  log_dict: dict = None,
                  name: str = 'A2C',
                  wandb_params: Optional[dict] = None):
+        """Creates a VPG agent.
+
+                Args:
+                    state_shape: Tuple representing the shape of the input space (observations).
+                    action_shape: Tuple representing the shape of the action space.
+                    actor: The policy network.
+                    actor_opt: Optimizer to use for training the actor.
+                    critic: (Optional) The critic network to use as baseline for computing advantages.
+                      If None, no baseline is used. Defaults to None.
+                    critic_opt: (Optional) Optimizer to use for training the critic. Must be provided when
+                      a critic is also provided. Defaults to None.
+                    critic_value_coef: (Optional) Coefficient applied on the value function during loss computation.
+                    policy: (Optional) The policy the agent should follow. Defaults to policy network's policy.
+                    gamma: (Optional) Discount factor. Defaults to 0.5.
+                    standardize: (Optional) If True, standardizes delta before computing gradient update.
+                      Defaults to True.
+                    entropy_coef: (Optional) Coefficient applied to entropy loss. Defaults to 1e-3.
+                    gradient_clip_norm: (Optional) Global norm for gradient clipping, pass None to disable.
+                      Defaults to 0.5.
+                    training: (Optional) If True, agent is in training phase. Defaults to True.
+                    log_dict: (Optional) Additional dict of config parameters that should be logged by WandB.
+                      Defaults to None.
+                    name: (Optional) Name of the agent.
+                    wandb_params: (Optional) Dict of parameters to enable WandB logging. Defaults to None.
+                """
         super(VPG, self).__init__(state_shape, action_shape, training=training, name=name)
 
         self._actor = actor

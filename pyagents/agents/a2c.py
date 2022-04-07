@@ -53,7 +53,7 @@ class A2C(Agent):
             log_dict: (Optional) Additional dict of config parameters that should be logged by WandB. Defaults to None.
             name: (Optional) Name of the agent.
             wandb_params: (Optional) Dict of parameters to enable WandB logging. Defaults to None.
-            """
+        """
         super(A2C, self).__init__(state_shape, action_shape, training=training, name=name)
 
         self._actor_critic = actor_critic
@@ -91,6 +91,10 @@ class A2C(Agent):
             self._init_logger(wandb_params)
 
     def _wandb_define_metrics(self):
+        """Defines WandB metrics.
+
+        For A2C, they are: policy network loss; critic network loss; policy distribution entropy loss.
+        """
         wandb.define_metric('policy_loss', step_metric="train_step", summary="min")
         wandb.define_metric('critic_loss', step_metric="train_step", summary="min")
         wandb.define_metric('entropy_loss', step_metric="train_step", summary="min")
@@ -98,7 +102,7 @@ class A2C(Agent):
     def clear_memory(self):
         self._trajectory = {'states': [], 'actions': [], 'rewards': [], 'next_states': [], 'dones': []}
 
-    def remember(self, state, action, reward, next_state, done):
+    def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool) -> None:
         self._trajectory['states'].append(state)
         self._trajectory['actions'].append(action)
         self._trajectory['rewards'].append(reward)
@@ -114,7 +118,7 @@ class A2C(Agent):
         critic_loss = self._critic_loss_fn(delta, critic_values)
         return policy_loss, critic_loss, entropy_loss
 
-    def _compute_n_step_returns(self, next_state, done):
+    def _compute_n_step_returns(self, next_state: np.ndarray, done: bool) -> tf.Tensor:
         rewards = self._trajectory['rewards']
         returns = np.empty_like(rewards)
         if done:
@@ -129,7 +133,7 @@ class A2C(Agent):
             returns[k] = disc_r
         return tf.convert_to_tensor(returns, dtype=tf.float32)
 
-    def _train(self, batch_size=None, *args, **kwargs):
+    def _train(self, batch_size=None, *args, **kwargs) -> dict:
         done, next_state = self._trajectory['dones'][-1], self._trajectory['next_states'][-1]
         if done or len(self._trajectory['rewards']) == self._n_step_return:  # perform training step
             states = tf.convert_to_tensor(self._trajectory['states'], dtype=tf.float32)
@@ -161,7 +165,9 @@ class A2C(Agent):
                 self._steps_last_update += 1
 
             self.clear_memory()
-            return {'policy_loss': float(policy_loss), 'critic_loss': float(critic_loss)}
+            return {'policy_loss': float(policy_loss),
+                    'critic_loss': float(critic_loss),
+                    'entropy_loss': float(entropy_loss)}
 
     def save(self, path):
         pass
