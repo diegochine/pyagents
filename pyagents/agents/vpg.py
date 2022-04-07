@@ -32,7 +32,7 @@ class VPG(Agent):
                  training: bool = True,
                  save_dir: str = './output',
                  log_dict: dict = None,
-                 name: str = 'A2C',
+                 name: str = 'VPG',
                  wandb_params: Optional[dict] = None):
         """Creates a VPG agent.
 
@@ -59,7 +59,7 @@ class VPG(Agent):
                     name: (Optional) Name of the agent.
                     wandb_params: (Optional) Dict of parameters to enable WandB logging. Defaults to None.
                 """
-        super(VPG, self).__init__(state_shape, action_shape, training=training, name=name)
+        super(VPG, self).__init__(state_shape, action_shape, training=training, save_dir=save_dir, name=name)
 
         self._actor = actor
         self._critic = critic

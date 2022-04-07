@@ -32,6 +32,7 @@ class A2C(Agent):
                  training: bool = True,
                  log_dict: dict = None,
                  name: str = 'A2C',
+                 save_dir: str = './output',
                  wandb_params: Optional[dict] = None):
         """Creates an A2C agent.
 
@@ -54,7 +55,7 @@ class A2C(Agent):
             name: (Optional) Name of the agent.
             wandb_params: (Optional) Dict of parameters to enable WandB logging. Defaults to None.
         """
-        super(A2C, self).__init__(state_shape, action_shape, training=training, name=name)
+        super(A2C, self).__init__(state_shape, action_shape, training=training, save_dir=save_dir, name=name)
 
         self._actor_critic = actor_critic
         self._opt = opt

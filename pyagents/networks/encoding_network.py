@@ -6,12 +6,17 @@ from pyagents.networks.network import Network
 @gin.configurable
 class EncodingNetwork(Network):
 
-    def __init__(self, state_shape, preprocessing_layers=None, dropout_params=None,
-                 conv_layer_params=None, fc_layer_params=None, activation='relu', dtype=tf.float32,
-                 name='EncodingNetwork', conv_type='2d'):
+    def __init__(self,
+                 state_shape,
+                 dropout_params=None,
+                 conv_layer_params=None,
+                 fc_layer_params=None,
+                 activation='relu',
+                 dtype=tf.float32,
+                 name='EncodingNetwork',
+                 conv_type='2d'):
         super().__init__(name=name)
         self._state_shape = state_shape
-        self._preprocessing_layers = preprocessing_layers
 
         # TODO improve inizialization, allow initizializer to be passed as parameter
         kernel_initializer = tf.keras.initializers.GlorotNormal()
@@ -71,7 +76,6 @@ class EncodingNetwork(Network):
         self._postprocessing_layers = layers
         self.built = True  # Allow access to self.variables
         self._config = {'state_shape': state_shape,
-                        'preprocessing_layers': [lay.config() for lay in self._preprocessing_layers] if preprocessing_layers else [],
                         'conv_layer_params': conv_layer_params if conv_layer_params else [],
                         'fc_layer_params': fc_layer_params if conv_layer_params else [],
                         'dropout_params': dropout_params if dropout_params else [],
@@ -82,9 +86,6 @@ class EncodingNetwork(Network):
 
     def call(self, inputs, training=False, mask=None):
         states = inputs
-        if self._preprocessing_layers is not None:
-            for prep_layer in self._preprocessing_layers:
-                states = prep_layer(states, training=training)
         for layer in self._postprocessing_layers:
             states = layer(states, training=training)
         return states

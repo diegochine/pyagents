@@ -1,11 +1,15 @@
 import abc
-from typing import Optional
+import json
+import os
+from typing import Optional, List, Dict
 
+import h5py
 import numpy as np
 import tensorflow as tf
 import wandb
 
 from pyagents.policies import Policy
+from pyagents.utils import json_utils
 
 
 class Agent(tf.Module, abc.ABC):
@@ -18,7 +22,15 @@ class Agent(tf.Module, abc.ABC):
 
     eps = 1e-8  # numerical stability
 
-    def __init__(self, state_shape: tuple, action_shape: tuple, training: bool = True, name: str = 'Agent'):
+    AGENT_FILE = 'agent'
+
+    def __init__(self,
+                 state_shape: tuple,
+                 action_shape: tuple,
+                 training: bool,
+                 save_dir: str = './output',
+                 save_memories: bool = False,
+                 name='Agent'):
         """Creates an Agent.
 
         Args:
@@ -31,6 +43,10 @@ class Agent(tf.Module, abc.ABC):
         self._state_shape = state_shape
         self._action_shape = action_shape
         self._training = training
+        self._save_memories = save_memories
+        self._save_dir = os.path.join(save_dir, name)
+        if not os.path.isdir(self._save_dir):
+            os.makedirs(self._save_dir)
         self._wandb_run = None
         self._log_dict = None
         self.is_logging = False
@@ -74,7 +90,7 @@ class Agent(tf.Module, abc.ABC):
         wandb.login(key=wandb_params['key'])
         self._wandb_run = wandb.init(
             project=wandb_params['project'], entity=wandb_params['entity'], group=wandb_params['group'],
-            reinit=True, config=self.config, tags=wandb_params['tags'])
+            reinit=True, config=self.get_full_config(), tags=wandb_params['tags'])
         wandb.define_metric('train_step', summary='max')
         self._wandb_define_metrics()
         self._log_dict = {}
@@ -162,13 +178,96 @@ class Agent(tf.Module, abc.ABC):
         """
         raise NotImplementedError('Must implement _wandb_define_metrics method to enable WandB logging.')
 
+    def _get_wandb_log_config(self):
+        raise NotImplementedError('Must implement _get_wandb_log_config method to enable WandB logging.')
+
     @abc.abstractmethod
-    def save(self, ver):
-        """Saves agent to storage."""
+    def _do_save_memories(self):
         pass
 
-    @classmethod
     @abc.abstractmethod
-    def load(cls, path: str, ver):
-        """Loads agent from storage."""
+    def _networks_config_and_weights(self) -> List[tuple]:
+        """ Returns a list of tuples (name, config, weights)
+        for each network that the agents wants to be saved"""
         pass
+
+    def save(self, ver):
+        """Saves agent to storage."""
+        if self._save_memories:
+            self._do_save_memories()
+
+        f = h5py.File(f'{self._save_dir}/{self.AGENT_FILE}_v{ver}', mode='w')
+        try:
+            agent_group = f.create_group('agent')
+            for k, v in self._config.items():
+                agent_group.attrs[k] = v
+
+            for net_name, net_config, net_weights in self._networks_config_and_weights():
+                net_config_group = f.create_group(f'{net_name}_config')
+                for k, v in net_config.items():
+                    if isinstance(v, (dict, list, tuple)):
+                        net_config_group.attrs[k] = json.dumps(v, default=json_utils.get_json_type).encode('utf8')
+                    else:
+                        net_config_group.attrs[k] = v
+
+                net_weights_group = f.create_group(f'{net_name}_weights')
+                for i, lay_weights in enumerate(net_weights):
+                    net_weights_group.create_dataset(f'{net_name}_weights{i:0>3}', data=lay_weights)
+
+            f.flush()
+        finally:
+            f.close()
+
+    @staticmethod
+    def networks_name() -> List[tuple]:
+        """ Returns a list of tuples (name, class)
+            for each network that needs to be loaded from storage."""
+        raise NotImplementedError('Must implement networks_name method to enable WandB logging.')
+
+    @staticmethod
+    def generate_input_config(
+            agent_config: dict,
+            networks: dict,
+            optimizer: tf.keras.optimizers,
+            load_mem: bool,
+            path: str) -> Dict:
+        """ Returns a dictionary of the input parameters in order to
+            instantiate the child class."""
+        raise NotImplementedError('Must implement generate_input_config method to enable WandB logging.')
+
+    @classmethod
+    def load(cls, path: str, ver, optimizer=None, load_mem: bool = False, **kwargs):
+        """Loads agent from storage."""
+        if optimizer is None:
+            optimizer = tf.keras.optimizers.Adam()
+
+        f = h5py.File(f'{path}/{cls.AGENT_FILE}_v{ver}', mode='r')
+        agent_group = f['agent']
+        agent_config = {}
+        for k, v in agent_group.attrs.items():
+            agent_config[k] = v
+
+        networks = {}
+        for net_name, net_class in cls.networks_name():
+            net_config = {}
+            net_config_group = f[f'{net_name}_config']
+            for k, v in net_config_group.attrs.items():
+                if isinstance(v, bytes):
+                    net_config[k] = json_utils.decode(v)
+                else:
+                    net_config[k] = v
+            net_weights_group = f[f'{net_name}_weights']
+            net_weights_group = {name: weights[...] for name, weights in net_weights_group.items()}
+            net_weights = [net_weights_group[f'{net_name}_weights{i:0>3}'] for i in range(len(net_weights_group))]
+
+            net = net_class.from_config(net_config)
+            # FIXME choose another name like input_shape (safer) or let child assign weights
+            net(tf.ones((1, *net_config['state_shape'])))
+            net.set_weights(net_weights)
+            networks[net_name] = net
+        f.close()
+
+        input_dict = cls.generate_input_config(agent_config, networks, optimizer, load_mem, path)
+
+        input_dict.update(kwargs)
+        return cls(**input_dict)

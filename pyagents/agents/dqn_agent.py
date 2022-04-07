@@ -1,6 +1,6 @@
 import os
 from math import log
-from typing import Optional
+from typing import Optional, List, Dict
 import gin
 import h5py
 import json
@@ -18,8 +18,6 @@ from copy import deepcopy
 
 @gin.configurable
 class DQNAgent(Agent):
-
-    W_Q_NET = 'qnet.hdf5'
 
     def __init__(self,
                  state_shape: tuple,
@@ -40,10 +38,7 @@ class DQNAgent(Agent):
                  training: bool = True,
                  save_dir: str = './output',
                  wandb_params: Optional[dict] = None):
-        super(DQNAgent, self).__init__(state_shape, action_shape, training=training, name=name)
-        self._save_dir = os.path.join(save_dir, name)
-        if not os.path.isdir(self._save_dir):
-            os.makedirs(self._save_dir)
+        super(DQNAgent, self).__init__(state_shape, action_shape, training=training, save_dir=save_dir, name=name)
         if buffer is not None:
             buffer.set_save_dir(self._save_dir)
             self._memory: Buffer = buffer
@@ -79,9 +74,6 @@ class DQNAgent(Agent):
         if wandb_params:
             self._init_logger(wandb_params)
 
-    def _wandb_define_metrics(self):
-        wandb.define_metric('loss', step_metric="train_step", summary="min")
-
     @property
     def memory_len(self):
         return len(self._memory.ltmemory)
@@ -97,6 +89,9 @@ class DQNAgent(Agent):
         :return:
         """
         self._memory.commit_stmemory([state, action, reward, next_state, done])
+
+    def _wandb_define_metrics(self):
+        wandb.define_metric('loss', step_metric="train_step", summary="min")
 
     def _loss(self, memories):
         state_batch, action_batch, reward_batch, next_state_batch, done_batch = memories
@@ -174,67 +169,37 @@ class DQNAgent(Agent):
                 s = new_state
                 step += 1
 
-    def save(self, ver, include_optimizer=False):
+    def _get_wandb_log_config(self):
+        pass
+
+    def _do_save_memories(self):
         self._memory.save()
+
+    def _networks_config_and_weights(self):
         net_config = self._online_q_network.get_config()
         net_weights = self._online_q_network.get_weights()
+        return [('q_net', net_config, net_weights)]
 
-        f = h5py.File(f'{self._save_dir}/{self.W_Q_NET}_v{ver}', mode='w')
-        try:
-            agent_group = f.create_group('agent')
-            for k, v in self._config.items():
-                if not k.startswith('q_net'):
-                    agent_group.attrs[k] = v
+    @staticmethod
+    def networks_name() -> List[tuple]:
+        return [('q_net', QNetwork)]
 
-            net_config_group = f.create_group('net_config')
-            for k, v in net_config.items():
-                if isinstance(v, (dict, list, tuple)):
-                    net_config_group.attrs[k] = json.dumps(v, default=json_utils.get_json_type).encode('utf8')
-                else:
-                    net_config_group.attrs[k] = v
-
-            net_weights_group = f.create_group('net_weights')
-            for i, lay_weights in enumerate(net_weights):
-                net_weights_group.create_dataset(f'net_weights{i:0>3}', data=lay_weights)
-
-            if include_optimizer and self._optimizer:
-                raise NotImplementedError()
-                # TODO save_optimizer_weights_to_hdf5_group(f, model.optimizer)
-
-            f.flush()
-        finally:
-            f.close()
-
-    @classmethod
-    def load(cls, path, ver, preprocessing_layers=None, optimizer=None, **kwargs):
-        if optimizer is None:
-            optimizer = tf.keras.optimizers.RMSprop(momentum=0.1)
-        f = h5py.File(f'{path}/{cls.W_Q_NET}_v{ver}', mode='r')
-        agent_group = f['agent']
-        agent_config = {}
-        for k, v in agent_group.attrs.items():
-            agent_config[k] = v
-
-        net_config = {}
-        net_config_group = f['net_config']
-        for k, v in net_config_group.attrs.items():
-            if isinstance(v, bytes):
-                net_config[k] = json_utils.decode(v)
-            else:
-                net_config[k] = v
-        net_weights_group = f['net_weights']
-        net_weights_group = {name: weights[...] for name, weights in net_weights_group.items()}
-        net_weights = [net_weights_group[f'net_weights{i:0>3}'] for i in range(len(net_weights_group))]
-        f.close()
-
-        q_net = QNetwork.from_config(net_config)
-        q_net(tf.ones((1, *net_config['state_shape'])))
-        q_net.set_weights(net_weights)
-        buffer = load_memories(path)
+    @staticmethod
+    def generate_input_config(
+            agent_config: dict,
+            networks: dict,
+            optimizer: tf.keras.optimizers,
+            load_mem: bool,
+            path: str) -> Dict:
+        if load_mem:
+            buffer = load_memories(path)
+        else:
+            buffer = None
+        q_net = networks['q_net']
+        net_config = q_net.get_config()
         agent_config.update({'state_shape': net_config['state_shape'],
                              'action_shape': net_config['action_shape'],
                              'q_network': q_net,
                              'optimizer': optimizer,
-                             'buffer': buffer,
-                             **kwargs})
-        return cls(**agent_config)
+                             'buffer': buffer})
+        return agent_config
