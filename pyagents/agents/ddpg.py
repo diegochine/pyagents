@@ -60,7 +60,7 @@ class DDPG(OffPolicyAgent):
                                    save_dir=save_dir,
                                    save_memories=save_memories,
                                    name=name)
-        if actor_opt is None or critic_opt is None and training:
+        if (actor_opt is None or critic_opt is None) and training:
             raise ValueError('agent cannot be trained without optimizers')
         self._ac = actor_critic
         self._ac_target = deepcopy(self._ac)

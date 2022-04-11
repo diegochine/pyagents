@@ -300,12 +300,12 @@ def train_ddpg_agent(test, n_episodes=1000,
             q_losses = []
 
         if player.is_logging:
-            wandb.log({'score': scores[-1], 'episode': episode, 'eps': player.policy.epsilon})
+            wandb.log({'score': scores[-1], 'episode': episode})
 
-        player.train(batch_size)
-
-        if (episode % 10) == 0:
-            player.save(ver=episode // 10)
+        if not test:
+            player.train(batch_size)
+            if (episode % 10) == 0:
+                player.save(ver=episode // 10)
 
     return scores, movavg100
 
