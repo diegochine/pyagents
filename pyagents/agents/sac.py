@@ -13,7 +13,7 @@ from pyagents.utils import types
 
 
 @gin.configurable
-class SAC(Agent):
+class SAC(OffPolicyAgent):
     """ An agent implementing the SAC algorithm """
 
     def __init__(self,
@@ -40,7 +40,14 @@ class SAC(Agent):
                  name: str = 'A2C',
                  save_dir: str = './output',
                  wandb_params: Optional[dict] = None):
-        super(SAC, self).__init__(state_shape, action_shape, training=training, save_dir=save_dir, name=name)
+        super(SAC, self).__init__(state_shape,
+                                  action_shape,
+                                  training=training,
+                                  buffer=buffer,
+                                  save_dir=save_dir,
+                                  name=name)
+        if actor_opt is None or critic_opt is None or alpha_opt is None and training:
+            raise ValueError('agent cannot be trained without optimizers')
 
         self._actor = actor
         self._critic1 = critic
@@ -54,11 +61,6 @@ class SAC(Agent):
             self._policy = self._actor.get_policy()
         else:
             self._policy = policy
-        if buffer is not None:
-            buffer.set_save_dir(self._save_dir)
-            self._memory: Buffer = buffer
-        else:
-            self._memory: Buffer = UniformBuffer(save_dir=self._save_dir)
         self.gamma = gamma
         self._standardize = standardize
         self._actor_coef = actor_coef
@@ -70,13 +72,34 @@ class SAC(Agent):
 
         # update config
 
-        if log_dict is not None:
-            self.config.update(**log_dict)
-
         if wandb_params:
-            self._init_logger(wandb_params)
+            self._init_logger(wandb_params, config={**self.config, **log_dict})
 
     def _wandb_define_metrics(self):
         wandb.define_metric('policy_loss', step_metric="train_step", summary="min")
         wandb.define_metric('critic_loss', step_metric="train_step", summary="min")
         wandb.define_metric('entropy_loss', step_metric="train_step", summary="min")
+
+    def _networks_config_and_weights(self):
+        net_config = self._online_q_network.get_config()
+        net_weights = self._online_q_network.get_weights()
+        return [('q_net', net_config, net_weights)]
+
+    @staticmethod
+    def networks_name() -> List[tuple]:
+        return [('q_net', DiscreteQNetwork)]
+
+    @staticmethod
+    def generate_input_config(
+            agent_config: dict,
+            networks: dict,
+            load_mem: bool,
+            path: str) -> Dict:
+        if load_mem:
+            buffer = load_memories(path)
+        else:
+            buffer = None
+        q_net = networks['q_net']
+        agent_config.update({'q_network': q_net,
+                             'buffer': buffer})
+        return agent_config

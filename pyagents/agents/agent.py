@@ -57,7 +57,9 @@ class Agent(tf.Module, abc.ABC):
         self._wandb_run = None
         self._log_dict = None
         self.is_logging = False
-        self._config = {'name': name}
+        self._config = {'state_shape': state_shape,
+                        'action_shape': action_shape,
+                        'name': name}
         self._train_step = 0
 
     @property
@@ -223,28 +225,25 @@ class Agent(tf.Module, abc.ABC):
             f.close()
 
     @staticmethod
+    @abc.abstractmethod
     def networks_name() -> List[tuple]:
         """ Returns a list of tuples (name, class)
             for each network that needs to be loaded from storage."""
         raise NotImplementedError('Must implement networks_name method to enable WandB logging.')
 
     @staticmethod
-    def generate_input_config(
-            agent_config: dict,
-            networks: dict,
-            optimizer: tf.keras.optimizers,
-            load_mem: bool,
-            path: str) -> Dict:
+    @abc.abstractmethod
+    def generate_input_config(agent_config: dict,
+                              networks: dict,
+                              load_mem: bool,
+                              path: str) -> Dict:
         """ Returns a dictionary of the input parameters in order to
             instantiate the child class."""
         raise NotImplementedError('Must implement generate_input_config method to enable WandB logging.')
 
     @classmethod
-    def load(cls, path: str, ver, optimizer=None, load_mem: bool = False, **kwargs):
+    def load(cls, path: str, ver, load_mem: bool = False, trainable=False, **kwargs):
         """Loads agent from storage."""
-        if optimizer is None:
-            optimizer = tf.keras.optimizers.Adam()
-
         f = h5py.File(f'{path}/{cls.AGENT_FILE}_v{ver}', mode='r')
         agent_group = f['agent']
         agent_config = {}
@@ -277,7 +276,7 @@ class Agent(tf.Module, abc.ABC):
             networks[net_name] = net
         f.close()
 
-        input_dict = cls.generate_input_config(agent_config, networks, optimizer, load_mem, path)
+        input_dict = cls.generate_input_config(agent_config, networks, load_mem, path)
 
         input_dict.update(kwargs)
         return cls(**input_dict)

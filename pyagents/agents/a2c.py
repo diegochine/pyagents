@@ -1,13 +1,13 @@
 import os
-from typing import Optional
+import pickle
+from typing import Optional, List, Dict
 import gin
-import h5py
-import json
 import numpy as np
 import tensorflow as tf
 import wandb
 from pyagents.agents import Agent
-from pyagents.networks import ActorCriticNetwork
+from pyagents.memory import load_memories
+from pyagents.networks import SharedBackboneACNetwork
 from pyagents.policies import Policy
 from pyagents.utils import types
 
@@ -33,6 +33,7 @@ class A2C(Agent):
                  log_dict: dict = None,
                  name: str = 'A2C',
                  save_dir: str = './output',
+                 save_memories: bool = False,
                  wandb_params: Optional[dict] = None):
         """Creates an A2C agent.
 
@@ -55,8 +56,14 @@ class A2C(Agent):
             name: (Optional) Name of the agent.
             wandb_params: (Optional) Dict of parameters to enable WandB logging. Defaults to None.
         """
-        super(A2C, self).__init__(state_shape, action_shape, training=training, save_dir=save_dir, name=name)
-
+        super(A2C, self).__init__(state_shape,
+                                  action_shape,
+                                  training=training,
+                                  save_dir=save_dir,
+                                  save_memories=save_memories,
+                                  name=name)
+        if opt is None and training:
+            raise ValueError('agent cannot be trained without optimizer')
         self._actor_critic = actor_critic
         self._opt = opt
         self._critic_loss_fn = tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)
@@ -170,9 +177,22 @@ class A2C(Agent):
                     'critic_loss': float(critic_loss),
                     'entropy_loss': float(entropy_loss)}
 
-    def save(self, path):
-        pass
+    def _networks_config_and_weights(self):
+        net_config = self._actor_critic.get_config()
+        net_weights = self._actor_critic.get_weights()
+        return [('actor_critic', net_config, net_weights)]
 
-    @classmethod
-    def load(cls, path, ver):
-        pass
+    @staticmethod
+    def networks_name() -> List[tuple]:
+        return [('actor_critic', SharedBackboneACNetwork)]
+
+    @staticmethod
+    def generate_input_config(
+            agent_config: dict,
+            networks: dict,
+            load_mem: bool,
+            path: str) -> Dict:
+
+        net = networks['actor_critic']
+        agent_config.update({'actor_critic': net})
+        return agent_config

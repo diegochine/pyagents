@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Optional, List, Dict
 import gin
 import h5py
 import json
@@ -20,7 +20,7 @@ class VPG(Agent):
                  state_shape: tuple,
                  action_shape: tuple,
                  actor: PolicyNetwork,
-                 actor_opt: tf.keras.optimizers.Optimizer,
+                 actor_opt: tf.keras.optimizers.Optimizer = None,
                  critic: ValueNetwork = None,
                  critic_opt: tf.keras.optimizers.Optimizer = None,
                  policy: Policy = None,
@@ -60,6 +60,8 @@ class VPG(Agent):
                     wandb_params: (Optional) Dict of parameters to enable WandB logging. Defaults to None.
                 """
         super(VPG, self).__init__(state_shape, action_shape, training=training, save_dir=save_dir, name=name)
+        if actor_opt is None and training:
+            raise ValueError('agent cannot be trained without optimizer')
 
         self._actor = actor
         self._critic = critic
@@ -184,9 +186,27 @@ class VPG(Agent):
                 'entropy_loss': float(entropy_loss),
                 'train_step': self._train_step}
 
-    def save(self, path):
-        pass
+    def _networks_config_and_weights(self):
+        a = [('actor_net', self._actor.get_config(), self._actor.get_weights())]
+        if self._critic:
+            a.append(('critic_net', self._critic.get_config(), self._critic.get_weights()))
+        return a
 
-    @classmethod
-    def load(cls, path, ver):
-        pass
+    @staticmethod
+    def networks_name() -> List[tuple]:
+        return [('actor_net', PolicyNetwork), ('critic_network', ValueNetwork)]
+
+    @staticmethod
+    def generate_input_config(
+            agent_config: dict,
+            networks: dict,
+            load_mem: bool,
+            path: str) -> Dict:
+        actor = networks['actor_network']
+        if 'critic_network' in networks:
+            critic = networks['critic_network']
+        else:
+            critic = None
+        agent_config.update({'actor': actor,
+                             'critic': critic})
+        return agent_config

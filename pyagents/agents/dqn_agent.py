@@ -20,13 +20,13 @@ from copy import deepcopy
 
 
 @gin.configurable
-class DQNAgent(Agent):
+class DQNAgent(OffPolicyAgent):
 
     def __init__(self,
                  state_shape: tuple,
                  action_shape: tuple,
-                 q_network: QNetwork,
-                 optimizer: tf.keras.optimizers.Optimizer,
+                 q_network: DiscreteQNetwork,
+                 optimizer: tf.keras.optimizers.Optimizer = None,
                  policy: Policy = None,
                  gamma: types.Float = 0.5,
                  epsilon: types.Float = 0.1,
@@ -43,12 +43,15 @@ class DQNAgent(Agent):
                  training: bool = True,
                  save_dir: str = './output',
                  wandb_params: Optional[dict] = None):
-        super(DQNAgent, self).__init__(state_shape, action_shape, training=training, save_dir=save_dir, name=name)
-        if buffer is not None:
-            buffer.set_save_dir(self._save_dir)
-            self._memory: Buffer = buffer
-        else:
-            self._memory: Buffer = UniformBuffer(save_dir=self._save_dir)
+        super(DQNAgent, self).__init__(state_shape,
+                                       action_shape,
+                                       training=training,
+                                       buffer=buffer,
+                                       save_dir=save_dir,
+                                       name=name)
+        if optimizer is None and training:
+            raise ValueError('agent cannot be trained without optimizer')
+
         self._gamma = gamma
         self._online_q_network = q_network
         self._target_q_network = deepcopy(self._online_q_network)
@@ -66,10 +69,7 @@ class DQNAgent(Agent):
             'target_update_period': self._target_update_period,
             'tau': self._tau,
             'ddqn': self._ddqn,
-            **{f'q_net/{k}': v for k, v in self._online_q_network.get_config().items()},
         })
-        if log_dict is not None:
-            self.config.update(**log_dict)
 
         if policy is None:
             policy = QPolicy(self._state_shape, self._action_shape, self._online_q_network)
@@ -78,23 +78,10 @@ class DQNAgent(Agent):
             self._policy = policy
 
         if wandb_params:
-            self._init_logger(wandb_params)
-
-    @property
-    def memory_len(self):
-        return len(self._memory.ltmemory)
-
-    def remember(self, state, action, reward, next_state, done):
-        """
-        Saves piece of memory
-        :param state: state at current timestep
-        :param action: action at current timestep
-        :param reward: reward at current timestep
-        :param next_state: state at next timestep
-        :param done: whether the episode has ended
-        :return:
-        """
-        self._memory.commit_stmemory([state, action, reward, next_state, done])
+            self._init_logger(wandb_params,
+                              {**self.config,
+                               **{f'q_net/{k}': v for k, v in self._online_q_network.get_config().items()},
+                               **log_dict})
 
     def _wandb_define_metrics(self):
         wandb.define_metric('loss', step_metric="train_step", summary="min")
@@ -160,28 +147,6 @@ class DQNAgent(Agent):
         done_batch = np.array([sample[4] for sample in minibatch])
         return [state_batch, action_batch, reward_batch, new_state_batch, done_batch]
 
-    def memory_init(self, env, max_steps, min_memories, actions=None):
-        while self.memory_len <= min_memories:
-            s = env.reset()
-            done = False
-            step = 0
-            self._memory.commit_ltmemory()
-            while not done and step < max_steps:
-                if actions:
-                    a = np.random.choice(actions, 1)
-                else:
-                    a = env.action_space.sample()
-                new_state, r, done, _ = env.step(a)
-                self.remember(s, a, r, new_state, done)
-                s = new_state
-                step += 1
-
-    def _get_wandb_log_config(self):
-        pass
-
-    def _do_save_memories(self):
-        self._memory.save()
-
     def _networks_config_and_weights(self):
         net_config = self._online_q_network.get_config()
         net_weights = self._online_q_network.get_weights()
@@ -195,7 +160,6 @@ class DQNAgent(Agent):
     def generate_input_config(
             agent_config: dict,
             networks: dict,
-            optimizer: tf.keras.optimizers,
             load_mem: bool,
             path: str) -> Dict:
         if load_mem:
@@ -203,10 +167,6 @@ class DQNAgent(Agent):
         else:
             buffer = None
         q_net = networks['q_net']
-        net_config = q_net.get_config()
-        agent_config.update({'state_shape': net_config['state_shape'],
-                             'action_shape': net_config['action_shape'],
-                             'q_network': q_net,
-                             'optimizer': optimizer,
+        agent_config.update({'q_network': q_net,
                              'buffer': buffer})
         return agent_config
