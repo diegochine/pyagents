@@ -12,6 +12,13 @@ from pyagents.policies import Policy
 from pyagents.utils import json_utils
 
 
+def update_target(source_vars, target_vars, tau=1.0):
+    # source_variables = self._online_q_network.variables
+    # target_variables = self._target_q_network.variables
+    for (sv, tv) in zip(source_vars, target_vars):
+        tv.assign((1 - tau) * tv + tau * sv)
+
+
 class Agent(tf.Module, abc.ABC):
     """Abstract base class for all implemented agents.
     The agent serves two purposes:
@@ -77,7 +84,7 @@ class Agent(tf.Module, abc.ABC):
         """
         self._training = not self._training if training is None else training
 
-    def _init_logger(self, wandb_params: dict) -> None:
+    def _init_logger(self, wandb_params: dict, config: dict) -> None:
         """Initializes WandB logger.
 
          Args:
@@ -90,7 +97,7 @@ class Agent(tf.Module, abc.ABC):
         wandb.login(key=wandb_params['key'])
         self._wandb_run = wandb.init(
             project=wandb_params['project'], entity=wandb_params['entity'], group=wandb_params['group'],
-            reinit=True, config=self.get_full_config(), tags=wandb_params['tags'])
+            reinit=True, config=config, tags=wandb_params['tags'])
         wandb.define_metric('train_step', summary='max')
         self._wandb_define_metrics()
         self._log_dict = {}
@@ -178,10 +185,6 @@ class Agent(tf.Module, abc.ABC):
         """
         raise NotImplementedError('Must implement _wandb_define_metrics method to enable WandB logging.')
 
-    def _get_wandb_log_config(self):
-        raise NotImplementedError('Must implement _get_wandb_log_config method to enable WandB logging.')
-
-    @abc.abstractmethod
     def _do_save_memories(self):
         pass
 
@@ -205,8 +208,9 @@ class Agent(tf.Module, abc.ABC):
             for net_name, net_config, net_weights in self._networks_config_and_weights():
                 net_config_group = f.create_group(f'{net_name}_config')
                 for k, v in net_config.items():
-                    if isinstance(v, (dict, list, tuple)):
-                        net_config_group.attrs[k] = json.dumps(v, default=json_utils.get_json_type).encode('utf8')
+                    if isinstance(v, (dict, list, tuple)):  # FIXME sto dumps non funziona dio cane
+                        v = json.dumps(v, default=json_utils.get_json_type).encode('utf8')
+                        net_config_group.attrs.create(k, np.void(v))
                     else:
                         net_config_group.attrs[k] = v
 
@@ -251,15 +255,21 @@ class Agent(tf.Module, abc.ABC):
         for net_name, net_class in cls.networks_name():
             net_config = {}
             net_config_group = f[f'{net_name}_config']
-            for k, v in net_config_group.attrs.items():
-                if isinstance(v, bytes):
-                    net_config[k] = json_utils.decode(v)
+            for i in net_config_group.attrs.items():
+                # if hasattr(i, 'decode'):
+                #     i = i.decode('utf-8')
+                # i = json_utils.decode(i)
+                k,v = i
+                if isinstance(v, np.void):
+                    net_config[k] = json_utils.decode(v.tobytes())
                 else:
+                    if v == '[]':
+                        v = None
                     net_config[k] = v
             net_weights_group = f[f'{net_name}_weights']
             net_weights_group = {name: weights[...] for name, weights in net_weights_group.items()}
             net_weights = [net_weights_group[f'{net_name}_weights{i:0>3}'] for i in range(len(net_weights_group))]
-
+            net_config['trainable'] = trainable
             net = net_class.from_config(net_config)
             # FIXME choose another name like input_shape (safer) or let child assign weights
             net(tf.ones((1, *net_config['state_shape'])))

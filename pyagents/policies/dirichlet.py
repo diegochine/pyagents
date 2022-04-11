@@ -1,8 +1,9 @@
+import gin
 import numpy as np
 import tensorflow_probability as tfp
 from pyagents.policies.policy import Policy
 
-
+@gin.configurable
 class DirichletPolicy(Policy):
 
     def __init__(self, state_shape, action_shape, actor_network, bounds=None):
@@ -23,6 +24,10 @@ class DirichletPolicy(Policy):
 
     def _distribution(self, obs):
         raise NotImplementedError()
+
+    def entropy(self, output):
+        dirichlet = tfp.distributions.Dirichlet(output)
+        return dirichlet.entropy()
 
     def log_prob(self, output, actions):
         dirichlet = tfp.distributions.Dirichlet(output)

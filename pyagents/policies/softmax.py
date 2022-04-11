@@ -1,16 +1,17 @@
 import numpy as np
 import tensorflow_probability as tfp
+
 from pyagents.policies.policy import Policy
 
 
 class SoftmaxPolicy(Policy):
 
-    def __init__(self, state_shape, action_shape, actor_network):
+    def __init__(self, state_shape, action_shape, policy_network):
         super().__init__(state_shape, action_shape)
-        self._actor_network = actor_network
+        self._policy_network = policy_network
 
     def _act(self, obs, deterministic=False, mask=None, training=True):
-        probs = self._actor_network(obs.reshape(1, *obs.shape))
+        probs = self._policy_network(obs.reshape(1, *obs.shape))
         if isinstance(probs, tuple):
             probs, _ = probs  # network is actor-critic network, outputting both probs and values
         probs = probs.numpy().squeeze(axis=0)

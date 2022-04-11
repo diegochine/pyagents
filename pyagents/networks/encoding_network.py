@@ -8,9 +8,9 @@ class EncodingNetwork(Network):
 
     def __init__(self,
                  state_shape,
+                 conv_params=None,
+                 fc_params=None,
                  dropout_params=None,
-                 conv_layer_params=None,
-                 fc_layer_params=None,
                  activation='relu',
                  dtype=tf.float32,
                  name='EncodingNetwork',
@@ -23,7 +23,7 @@ class EncodingNetwork(Network):
 
         layers = []
 
-        if conv_layer_params:
+        if conv_params:
             if conv_type == '2d':
                 conv_layer_type = tf.keras.layers.Conv2D
             elif conv_type == '1d':
@@ -32,7 +32,7 @@ class EncodingNetwork(Network):
                 raise ValueError('unsupported conv type of %s. Use 1d or 2d' % (
                     conv_type))
 
-            for config in conv_layer_params:
+            for config in conv_params:
                 if len(config) == 4:
                     (filters, kernel_size, strides, dilation_rate) = config
                 elif len(config) == 3:
@@ -53,12 +53,12 @@ class EncodingNetwork(Network):
 
         layers.append(tf.keras.layers.Flatten())
         if dropout_params is None or isinstance(dropout_params, float):
-            dropout_params = [dropout_params] * len(fc_layer_params)
+            dropout_params = [dropout_params] * len(fc_params)
         else:
             assert isinstance(dropout_params, (tuple, list)), f'unrecognized type for dropout_params {type(dropout_params)} '
-        if fc_layer_params:
-            assert len(fc_layer_params) == len(dropout_params), f'params length do not match (fc: {len(fc_layer_params)}, dropout: {len(dropout_params)})'
-            for num_units, dropout in zip(fc_layer_params, dropout_params):
+        if fc_params:
+            assert len(fc_params) == len(dropout_params), f'params length do not match (fc: {len(fc_params)}, dropout: {len(dropout_params)})'
+            for num_units, dropout in zip(fc_params, dropout_params):
                 kernel_regularizer = None  # if necessary sholud have wheight decay param as in tf
                 layers.append(
                     tf.keras.layers.Dense(
@@ -76,9 +76,9 @@ class EncodingNetwork(Network):
         self._postprocessing_layers = layers
         self.built = True  # Allow access to self.variables
         self._config = {'state_shape': state_shape,
-                        'conv_layer_params': conv_layer_params if conv_layer_params else [],
-                        'fc_layer_params': fc_layer_params if conv_layer_params else [],
-                        'dropout_params': dropout_params if dropout_params else [],
+                        'conv_layer_params': conv_params if conv_params else tuple(),
+                        'fc_layer_params': fc_params if conv_params else tuple(),
+                        'dropout_params': dropout_params if dropout_params else tuple(),
                         'activation': activation,
                         'dtype': dtype,
                         'name': name,

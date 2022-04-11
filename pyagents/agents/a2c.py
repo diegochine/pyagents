@@ -19,7 +19,7 @@ class A2C(Agent):
     def __init__(self,
                  state_shape: tuple,
                  action_shape: tuple,
-                 actor_critic: ActorCriticNetwork,
+                 actor_critic: SharedBackboneACNetwork,
                  opt: tf.keras.optimizers.Optimizer,
                  policy: Policy = None,
                  gamma: types.Float = 0.5,
@@ -149,7 +149,7 @@ class A2C(Agent):
                 loss = policy_loss + critic_loss - self._entropy_coef * entropy_loss
 
             assert not tf.math.is_inf(loss) and not tf.math.is_nan(loss)
-            grads = tape.gradient(loss, self.trainable_variables)
+            grads = tape.gradient(loss, self._actor_critic.trainable_variables)
             if self._gradient_clip_norm is not None:
                 grads, norm = tf.clip_by_global_norm(grads, self._gradient_clip_norm)
             if self._acc_grads is None:
@@ -159,7 +159,7 @@ class A2C(Agent):
 
             # simulate A3C async update of gradients by multiple parallel learners
             if self._steps_last_update == self._acc_grads_steps:
-                self._opt.apply_gradients(list(zip(self._acc_grads, self.trainable_variables)))
+                self._opt.apply_gradients(list(zip(self._acc_grads, self._actor_critic.trainable_variables)))
                 self._steps_last_update = 0
                 self._acc_grads = None
             else:

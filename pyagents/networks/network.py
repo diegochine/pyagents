@@ -12,6 +12,10 @@ class Network(tf.keras.layers.Layer, ABC):
     def call(self, inputs, training=None, mask=None):
         pass
 
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
     @property
     def variables(self):
         if not self.built:

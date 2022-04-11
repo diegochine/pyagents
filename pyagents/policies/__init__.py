@@ -5,3 +5,5 @@ from pyagents.policies.qpolicy import QPolicy
 from pyagents.policies.gaussian import GaussianPolicy
 from pyagents.policies.dirichlet import DirichletPolicy
 from pyagents.policies.softmax import SoftmaxPolicy
+from pyagents.policies.fixed_policy import FixedPolicy
+from pyagents.policies.normal_noise_policy import NormalNoisePolicy

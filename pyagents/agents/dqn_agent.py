@@ -7,11 +7,14 @@ import json
 import numpy as np
 import tensorflow as tf
 import wandb
-from keras.losses import Huber, mean_squared_error
+from keras.losses import MeanSquaredError, Huber
+
+from pyagents.agents.agent import update_target
+from pyagents.agents.off_policy_agent import OffPolicyAgent
 from pyagents.utils import json_utils, types
 from pyagents.agents import Agent
 from pyagents.memory import Buffer, UniformBuffer, load_memories
-from pyagents.networks import QNetwork
+from pyagents.networks import DiscreteQNetwork
 from pyagents.policies import QPolicy, EpsGreedyPolicy, Policy
 from copy import deepcopy
 
@@ -27,12 +30,14 @@ class DQNAgent(Agent):
                  policy: Policy = None,
                  gamma: types.Float = 0.5,
                  epsilon: types.Float = 0.1,
-                 epsilon_decay: types.Float = 0.98,
+                 epsilon_decay: types.Float = 0.99,
                  epsilon_min: types.Float = 0.01,
                  target_update_period: int = 500,
                  tau: types.Float = 1.0,
                  ddqn: bool = True,
                  buffer: Optional[Buffer] = None,
+                 loss_fn: str = 'mse',
+                 gradient_clip_norm: Optional[types.Float] = 0.5,
                  log_dict: dict = None,
                  name: str = 'DQNAgent',
                  training: bool = True,
@@ -50,9 +55,10 @@ class DQNAgent(Agent):
         self._target_update_period = target_update_period
         self._tau = tau
         self._optimizer = optimizer
-        self._td_errors_loss_fn = mean_squared_error  # Huber(reduction=tf.keras.losses.Reduction.NONE)
+        self._td_errors_loss_fn = MeanSquaredError(reduction='none') if loss_fn == 'mse' else Huber(reduction='none')
         self._train_step = tf.Variable(0, trainable=False, name="train step counter")
         self._ddqn = ddqn
+        self._gradient_clip_norm = gradient_clip_norm
         self._name = name
 
         self.config.update({
@@ -111,35 +117,36 @@ class DQNAgent(Agent):
         target_values = tf.stack([target_values for _ in range(self._action_shape)], axis=1)
         update_idx = tf.convert_to_tensor([[i == a for i in range(self._action_shape)] for a in action_batch])
         target_q_values = tf.where(update_idx, target_values, current_q_values)
-        td_loss = self._td_errors_loss_fn(current_q_values, target_q_values)
+        # reshape qvals because of reduction axis
+        td_loss = self._td_errors_loss_fn(tf.expand_dims(current_q_values, -1), tf.expand_dims(target_q_values, -1))
+        td_loss = tf.reduce_mean(td_loss, axis=-1)
         return td_loss
 
     def _train(self, batch_size=128, *args, **kwargs):
         self._memory.commit_ltmemory()
-        if self._training and len(self._memory) > batch_size:
-            memories, indexes, is_weights = self._memory.sample(batch_size, vectorizing_fn=self._minibatch_to_tf)
-            with tf.GradientTape() as tape:
-                td_loss = self._loss(memories)
-                loss = tf.reduce_mean(is_weights * td_loss)
-            # use computed loss to update memories priorities (when using a prioritized buffer)
-            self._memory.update_samples(tf.math.abs(td_loss), indexes)
-            variables_to_train = self._online_q_network.trainable_weights
-            grads = tape.gradient(loss, variables_to_train)
-            grads_and_vars = list(zip(grads, variables_to_train))
-            self._optimizer.apply_gradients(grads_and_vars)
-            self._train_step.assign_add(1)
-            if tf.math.mod(self._train_step, self._target_update_period) == 0:
-                self._update_target()
-            # the following only for epsgreedy policies
-            # TODO make it more generic
-            self._policy.update_eps()
-            return {'loss': float(loss)}
-
-    def _update_target(self):
-        source_variables = self._online_q_network.variables
-        target_variables = self._target_q_network.variables
-        for (sv, tv) in zip(source_variables, target_variables):
-            tv.assign((1 - self._tau) * tv + self._tau * sv)
+        assert self._training, 'called train function while in evaluation mode, call toggle_training() before'
+        assert len(self._memory) > batch_size, f'batch size bigger than amount of memories'
+        memories, indexes, is_weights = self._memory.sample(batch_size, vectorizing_fn=self._minibatch_to_tf)
+        with tf.GradientTape() as tape:
+            td_loss = self._loss(memories)
+            loss = tf.reduce_mean(is_weights * td_loss)
+        # use computed loss to update memories priorities (when using a prioritized buffer)
+        self._memory.update_samples(tf.math.abs(td_loss), indexes)
+        variables_to_train = self._online_q_network.trainable_weights
+        grads = tape.gradient(loss, variables_to_train)
+        if self._gradient_clip_norm is not None:
+            grads, norm = tf.clip_by_global_norm(grads, self._gradient_clip_norm)
+        grads_and_vars = list(zip(grads, variables_to_train))
+        self._optimizer.apply_gradients(grads_and_vars)
+        self._train_step.assign_add(1)
+        if tf.math.mod(self._train_step, self._target_update_period) == 0:
+            update_target(source_vars=self._online_q_network.variables,
+                          target_vars=self._target_q_network.variables,
+                          tau=self._tau)
+        # the following only for epsgreedy policies
+        # TODO make it more generic
+        self._policy.update_eps()
+        return {'td_loss': float(loss)}
 
     def _minibatch_to_tf(self, minibatch):
         """ Given a list of experience tuples (s_t, a_t, r_t, s_t+1, done_t)
@@ -182,7 +189,7 @@ class DQNAgent(Agent):
 
     @staticmethod
     def networks_name() -> List[tuple]:
-        return [('q_net', QNetwork)]
+        return [('q_net', DiscreteQNetwork)]
 
     @staticmethod
     def generate_input_config(

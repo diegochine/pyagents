@@ -1,0 +1,9 @@
+train_dqn_agent.buffer = 'uniform'
+
+DQNAgent.gamma = 0.99
+DQNAgent.epsilon = 1.0
+DQNAgent.epsilon_decay = 0.999
+DQNAgent.target_update_period = 50
+DQNAgent.loss_fn = 'mse'
+
+QNetwork.fc_layer_params = (16, 8)

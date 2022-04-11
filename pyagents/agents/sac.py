@@ -1,12 +1,13 @@
 from copy import deepcopy
-from typing import Optional
-
+from typing import Optional, Dict, List
+import gin
 import numpy as np
 import tensorflow as tf
 import wandb
 from pyagents.agents import Agent
-from pyagents.memory import Buffer, UniformBuffer
-from pyagents.networks import PolicyNetwork, QNetwork
+from pyagents.agents.off_policy_agent import OffPolicyAgent
+from pyagents.memory import Buffer, UniformBuffer, load_memories
+from pyagents.networks import PolicyNetwork, DiscreteQNetwork
 from pyagents.policies import Policy
 from pyagents.utils import types
 
@@ -19,11 +20,11 @@ class SAC(Agent):
                  state_shape: tuple,
                  action_shape: tuple,
                  actor: PolicyNetwork,
-                 critic: QNetwork,
-                 opt_actor: tf.keras.optimizers.Optimizer,
-                 opt_critic: tf.keras.optimizers.Optimizer,
-                 opt_alpha: tf.keras.optimizers.Optimizer,
-                 critic2: Optional[QNetwork] = None,
+                 critic: DiscreteQNetwork,
+                 actor_opt: tf.keras.optimizers.Optimizer,
+                 critic_opt: tf.keras.optimizers.Optimizer,
+                 alpha_opt: tf.keras.optimizers.Optimizer,
+                 critic2: Optional[DiscreteQNetwork] = None,
                  policy: Policy = None,
                  buffer: Optional[Buffer] = None,
                  gamma: types.Float = 0.5,
@@ -46,9 +47,9 @@ class SAC(Agent):
         self._critic2 = critic2
         if self._critic2 is None:
             self._critic2 = deepcopy(self._critic1)
-        self._opt_actor = opt_actor
-        self._opt_critic = opt_critic
-        self._opt_alpha = opt_alpha
+        self._actor_opt = actor_opt
+        self._critic_opt = critic_opt
+        self._alpha_opt = alpha_opt
         if policy is None:
             self._policy = self._actor.get_policy()
         else:

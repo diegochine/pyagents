@@ -1,0 +1,18 @@
+train_ddpg_agent.steps_to_train = 1
+train_ddpg_agent.batch_size = 64
+train_ddpg_agent.a_learning_rate = 1e-3
+train_ddpg_agent.c_learning_rate = 2e-3
+
+PolicyNetwork.fc_params = (256, 256)
+PolicyNetwork.dropout_params = 0.1
+
+FixedPolicy.scaling_factor = 2.0
+
+QNetwork.obs_fc_params = (16, 32)
+QNetwork.obs_dropout_params = 0.05
+QNetwork.act_fc_params = (32, )
+QNetwork.fc_params = (256, 256)
+QNetwork.dropout_params = 0.1
+QNetwork.dueling = False
+
+DDPG.tau = 0.1
