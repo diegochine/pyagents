@@ -16,8 +16,9 @@ import gin
 
 
 @gin.configurable
-def train_dqn_agent(test, n_episodes=1000, batch_size=128, learning_rate=0.001, steps_to_train=4, buffer='uniform',
+def train_dqn_agent(test_ver, n_episodes=1000, batch_size=128, learning_rate=0.001, steps_to_train=4, buffer='uniform',
                     max_steps=500, min_memories=30000, output_dir="./output/", wandb_params=None):
+    is_testing = (test_ver >= 0)
     env = gym.make('CartPole-v1')
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
@@ -28,12 +29,12 @@ def train_dqn_agent(test, n_episodes=1000, batch_size=128, learning_rate=0.001, 
     buffer = PrioritizedBuffer() if buffer == 'prioritized' else UniformBuffer()
     q_net = DiscreteQNetwork(state_size, action_size)
     optim = Adam(learning_rate=learning_rate)
-    if not test:
+    if not is_testing:
         player = DQNAgent(state_size, action_size, q_network=q_net, buffer=buffer, optimizer=optim,
                           name='dqn', wandb_params=wandb_params,
                           log_dict={'learning_rate': learning_rate})
     else:
-        player = DQNAgent.load('output/dqn', ver=1, epsilon=0.01, training=False)
+        player = DQNAgent.load('output/dqn', ver=test_ver, epsilon=0.01, training=False)
     if player.is_logging:
         wandb.define_metric('score', step_metric="episode", summary="max")
     scores = []
@@ -49,7 +50,7 @@ def train_dqn_agent(test, n_episodes=1000, batch_size=128, learning_rate=0.001, 
         done = False
 
         while not done and step < max_steps:
-            if test:
+            if is_testing:
                 env.render()
             a_t = player.act(s_t)
             s_tp1, r_t, done, info = env.step(a_t)
@@ -58,7 +59,7 @@ def train_dqn_agent(test, n_episodes=1000, batch_size=128, learning_rate=0.001, 
             player.remember(state=s_t, action=a_t, reward=r_t, next_state=s_tp1, done=done)
             s_t = s_tp1
 
-            if not test and step % steps_to_train == 0:
+            if not is_testing and step % steps_to_train == 0:
                 losses = player.train(batch_size)
             step += 1
 
@@ -84,9 +85,10 @@ def train_dqn_agent(test, n_episodes=1000, batch_size=128, learning_rate=0.001, 
 
 
 @gin.configurable
-def train_vpg_agent(test, n_episodes=1000, max_steps=250,
+def train_vpg_agent(test_ver, n_episodes=1000, max_steps=250,
                     actor_learning_rate=1e-4, critic_learning_rate=1e-3, schedule=True,
                     output_dir="./output/", wandb_params=None):
+    is_testing = (test_ver >= 0)
     env = gym.make('CartPole-v1')
     state_size = env.observation_space.shape[0]
     action_size = (env.action_space.n,)
@@ -96,9 +98,9 @@ def train_vpg_agent(test, n_episodes=1000, max_steps=250,
 
     a_net = PolicyNetwork(state_size, action_size,
                           output='softmax',
-                          fc_layer_params=(16, 16),
+                          fc_params=(16, 16),
                           dropout_params=0.1)
-    v_net = ValueNetwork(state_size, fc_layer_params=(16, 16), dropout_params=0.1)
+    v_net = ValueNetwork(state_size, fc_params=(16, 16), dropout_params=0.1)
     if schedule:
         a_lr = tf.keras.optimizers.schedules.PolynomialDecay(actor_learning_rate, n_episodes, actor_learning_rate / 100)
         c_lr = tf.keras.optimizers.schedules.PolynomialDecay(critic_learning_rate, n_episodes,
@@ -108,14 +110,14 @@ def train_vpg_agent(test, n_episodes=1000, max_steps=250,
         c_lr = critic_learning_rate
     a_opt = Adam(learning_rate=a_lr)
     v_opt = Adam(learning_rate=c_lr)
-    if not test:
+    if not is_testing:
         player = VPG(state_size, action_size,
                      actor=a_net, critic=v_net, actor_opt=a_opt, critic_opt=v_opt,
                      name='vpg', wandb_params=wandb_params,
                      log_dict={'actor_learning_rate': actor_learning_rate,
                                'critic_learning_rate': critic_learning_rate})
     else:
-        player = VPG.load('output/vpg', ver=1, epsilon=0.01, training=False)
+        player = VPG.load('output/vpg', ver=test_ver, epsilon=0.01, training=False)
     if player.is_logging:
         wandb.define_metric('score', step_metric="episode", summary="max")
     scores = []
@@ -130,7 +132,7 @@ def train_vpg_agent(test, n_episodes=1000, max_steps=250,
         done = False
 
         while not done and step < max_steps:
-            if test:
+            if is_testing:
                 env.render()
             a_t = player.act(s_t)
             s_tp1, r_t, done, info = env.step(a_t)
@@ -140,28 +142,31 @@ def train_vpg_agent(test, n_episodes=1000, max_steps=250,
             s_t = s_tp1
             step += 1
             score += r_t
+        if not is_testing:
+            losses = player.train()
 
-        losses = player.train()
         if player.is_logging:
             wandb.log({'score': step, 'episode': episode})
         scores.append(step)
         this_episode_score = np.mean(scores[-100:])
         movavg100.append(this_episode_score)
 
-        if episode % 1 == 0:
-            print(f'EPISODE: {episode:4d}/{n_episodes:4d}, SCORE: {this_episode_score:3.0f}, '
-                  f'POLICY LOSS: {losses["policy_loss"]:4.2f}, CRITIC LOSS: {losses["critic_loss"]:5.2f}')
+        log_str = f'EPISODE: {episode:4d}/{n_episodes:4d}, SCORE: {this_episode_score:3.0f}'
+        if not is_testing:
+            log_str += f',POLICY LOSS: {losses["policy_loss"]:4.2f}, CRITIC LOSS: {losses["critic_loss"]:5.2f}'
+        print(log_str)
 
-        # if (episode % 100) == 0:
-        #     player.save(ver=episode//100)
+        if (episode % 100) == 0:
+            player.save(ver=episode//100)
 
     return scores, movavg100
 
 
 @gin.configurable
-def train_a2c_agent(test, n_episodes=1000, max_steps=250,
+def train_a2c_agent(test_ver, n_episodes=1000, max_steps=250,
                     learning_rate=1e-3, schedule=True,
                     output_dir="./output/", wandb_params=None):
+    is_testing = (test_ver >= 0)
     env = gym.make('CartPole-v1')
     state_shape = env.observation_space.shape[0]
     action_shape = (env.action_space.n,)
@@ -175,12 +180,12 @@ def train_a2c_agent(test, n_episodes=1000, max_steps=250,
     else:
         lr = learning_rate
     opt = Adam(learning_rate=lr)
-    if not test:
+    if not is_testing:
         player = A2C(state_shape, action_shape, actor_critic=ac_net, opt=opt,
                      name='a2c', wandb_params=wandb_params,
                      log_dict={'actor_learning_rate': learning_rate, 'critic_learning_rate': learning_rate})
     else:
-        player = A2C.load('output/a2c', ver=3, training=False)
+        player = A2C.load('output/a2c', ver=test_ver, training=False)
     if player.is_logging:
         wandb.define_metric('score', step_metric="episode", summary="max")
     scores = []
@@ -196,7 +201,7 @@ def train_a2c_agent(test, n_episodes=1000, max_steps=250,
         losses = None
 
         while not done and step < max_steps:
-            if test:
+            if is_testing:
                 env.render()
             a_t = player.act(s_t)
             s_tp1, r_t, done, info = env.step(a_t)
@@ -206,31 +211,32 @@ def train_a2c_agent(test, n_episodes=1000, max_steps=250,
             s_t = s_tp1
             step += 1
             score += r_t
-            loss_info = player.train()
-            losses = loss_info if loss_info is not None else losses
+            if not is_testing:
+                loss_info = player.train()
+                losses = loss_info if loss_info is not None else losses
 
         scores.append(step)
         this_episode_score = np.mean(scores[-100:])
         movavg100.append(this_episode_score)
         if player.is_logging:
             wandb.log({'score': step, 'episode': episode})
-        if episode % 1 == 0:
-            if losses is not None:
-                loss_str = f', POLICY LOSS: {losses["policy_loss"]:4.2f}, CRITIC LOSS: {losses["critic_loss"]:5.2f}'
-            else:
-                loss_str = ''
-            print(f'EPISODE: {episode:4d}/{n_episodes:4d}, SCORE: {this_episode_score:3.0f}' + loss_str)
+        if not is_testing and losses is not None:
+            loss_str = f', POLICY LOSS: {losses["policy_loss"]:4.2f}, CRITIC LOSS: {losses["critic_loss"]:5.2f}'
+        else:
+            loss_str = ''
+        print(f'EPISODE: {episode:4d}/{n_episodes:4d}, SCORE: {this_episode_score:3.0f}' + loss_str)
 
-        # if (episode % 100) == 0:
-        #     player.save(ver=episode//100)
+        if (episode % 100) == 0:
+            player.save(ver=episode//100)
 
     return scores, movavg100
 
 
 @gin.configurable
-def train_ddpg_agent(test, n_episodes=1000,
+def train_ddpg_agent(test_ver, n_episodes=1000,
                      batch_size=128, a_learning_rate=5e-4, c_learning_rate=1e-3, steps_to_train=25,
                      max_steps=250, min_memories=50000, output_dir="./output/", wandb_params=None):
+    is_testing = (test_ver >= 0)
     env = gym.make('Pendulum-v1')
     state_size = env.observation_space.shape
     action_size = env.action_space.shape
@@ -247,11 +253,12 @@ def train_ddpg_agent(test, n_episodes=1000,
                    pi_out='continuous', pi_params=pi_params, q_params=q_params)
     a_opt = Adam(learning_rate=a_learning_rate)
     c_opt = Adam(learning_rate=c_learning_rate)
-    if not test:
+    if not is_testing:
         player = DDPG(state_size, action_size, actor_critic=ac, buffer=buffer, actor_opt=a_opt, critic_opt=c_opt,
                       action_bounds=bounds, name='ddpg', wandb_params=wandb_params,
                       log_dict={'actor_learning_rate': a_learning_rate,
                                 'critic_learning_rate': c_learning_rate})
+        player.memory_init(env, max_steps, min_memories)
     else:
         player = DDPG.load('output/ddpg', ver=3, training=False)
     if player.is_logging:
@@ -260,7 +267,6 @@ def train_ddpg_agent(test, n_episodes=1000,
     movavg100 = []
     pi_losses = []
     q_losses = []
-    player.memory_init(env, max_steps, min_memories)
 
     for episode in range(1, n_episodes + 1):
 
@@ -271,7 +277,7 @@ def train_ddpg_agent(test, n_episodes=1000,
         done = False
 
         while not done and step < max_steps:
-            if test or True:
+            if is_testing:
                 env.render()
             a_t = player.act(s_t.reshape(1, -1))[0]
             s_tp1, r_t, done, info = env.step(a_t)
@@ -280,7 +286,7 @@ def train_ddpg_agent(test, n_episodes=1000,
             player.remember(state=s_t, action=a_t, reward=r_t, next_state=s_tp1, done=done)
             s_t = s_tp1
 
-            if not test and step % steps_to_train == 0:
+            if not is_testing and step % steps_to_train == 0:
                 for _ in range(steps_to_train):
                     losses = player.train(batch_size)
                     pi_losses.append(losses['policy_loss'])
@@ -302,7 +308,7 @@ def train_ddpg_agent(test, n_episodes=1000,
         if player.is_logging:
             wandb.log({'score': scores[-1], 'episode': episode})
 
-        if not test:
+        if not is_testing:
             player.train(batch_size)
             if (episode % 10) == 0:
                 player.save(ver=episode // 10)
@@ -319,19 +325,20 @@ def reset_random_seed(seed):
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Script for training a sample agent on Gym")
-    parser.add_argument('-a', '--agent', type=str, help='which agent to train, either DQN, VPG or A2C ')
-    parser.add_argument('-c', '--config', type=str, help='path to gin config file', default='')
-    parser.add_argument('-to', '--test-only', action='store_true', help='if set, perform test of trained agent')
+    parser.add_argument('-a', '--agent', type=str, help='which agent to use, either DQN, VPG, A2C or DDPG')
+    parser.add_argument('-c', '--config', type=str, default='', help='path to gin config file')
+    parser.add_argument('-tv', '--test-ver', type=int, default=-1,
+                        help='if -1, trains; if >=0, performs evaluation using this version')
     args = parser.parse_args()
     if args.config:
         gin.parse_config_file(args.config)
     if args.agent == 'dqn':
-        info = train_dqn_agent(test=args.test_only)
+        info = train_dqn_agent(test_ver=args.test_ver)
     elif args.agent == 'vpg':
-        info = train_vpg_agent(test=args.test_only)
+        info = train_vpg_agent(test_ver=args.test_ver)
     elif args.agent == 'a2c':
-        info = train_a2c_agent(test=args.test_only)
+        info = train_a2c_agent(test_ver=args.test_ver)
     elif args.agent == 'ddpg':
-        info = train_ddpg_agent(test=args.test_only)
+        info = train_ddpg_agent(test_ver=args.test_ver)
     else:
         raise ValueError(f'wrong agent {args.agent}')

@@ -28,7 +28,7 @@ class DQNAgent(OffPolicyAgent):
                  q_network: DiscreteQNetwork,
                  optimizer: tf.keras.optimizers.Optimizer = None,
                  policy: Policy = None,
-                 gamma: types.Float = 0.5,
+                 gamma: types.Float = 0.99,
                  epsilon: types.Float = 0.1,
                  epsilon_decay: types.Float = 0.99,
                  epsilon_min: types.Float = 0.01,

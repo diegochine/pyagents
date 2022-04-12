@@ -37,3 +37,9 @@ class Policy(ABC):
     @abstractmethod
     def _act(self, obs, **kwargs):
         pass
+
+    def log_prob(self, output, action):
+        raise NotImplementedError('Custom stochastic policy should implement log_prob() method if necessary')
+
+    def entropy(self, output):
+        raise NotImplementedError('Custom stochastic policy should implement entropy() method if necessary')

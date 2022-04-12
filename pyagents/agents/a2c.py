@@ -22,7 +22,7 @@ class A2C(Agent):
                  actor_critic: SharedBackboneACNetwork,
                  opt: tf.keras.optimizers.Optimizer,
                  policy: Policy = None,
-                 gamma: types.Float = 0.5,
+                 gamma: types.Float = 0.99,
                  standardize: bool = True,
                  n_step_return: int = 1,
                  lam_gae: float = 1,

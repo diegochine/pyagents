@@ -9,8 +9,8 @@ class ValueNetwork(Network):
 
     def __init__(self,
                  state_shape,
-                 conv_layer_params=None,
-                 fc_layer_params=(64, 64),
+                 conv_params=None,
+                 fc_params=(64, 64),
                  dropout_params=None,
                  activation='relu',
                  name='ValueNetwork',
@@ -18,18 +18,18 @@ class ValueNetwork(Network):
                  dtype=tf.float32):
         super(ValueNetwork, self).__init__(name, trainable, dtype)
         self._config = {'state_shape': state_shape,
-                        'conv_layer_params': conv_layer_params if conv_layer_params else [],
-                        'fc_layer_params': fc_layer_params if fc_layer_params else [],
+                        'conv_layer_params': conv_params if conv_params else [],
+                        'fc_layer_params': fc_params if fc_params else [],
                         'dropout_params': dropout_params if dropout_params else [],
                         'activation': activation,
                         'name': name}
-        if conv_layer_params is None and fc_layer_params is None:
+        if conv_params is None and fc_params is None:
             self._encoder = None
         else:
             self._encoder = EncodingNetwork(
                 state_shape,
-                conv_params=conv_layer_params,
-                fc_params=fc_layer_params,
+                conv_params=conv_params,
+                fc_params=fc_params,
                 dropout_params=dropout_params,
                 activation=activation,
             )

@@ -24,7 +24,7 @@ class VPG(Agent):
                  critic: ValueNetwork = None,
                  critic_opt: tf.keras.optimizers.Optimizer = None,
                  policy: Policy = None,
-                 gamma: types.Float = 0.5,
+                 gamma: types.Float = 0.99,
                  standardize: bool = True,
                  critic_value_coef: types.Float = 0.5,
                  entropy_coef: types.Float = 1e-4,
@@ -117,7 +117,7 @@ class VPG(Agent):
     def _loss(self, memories):
         states, actions, returns = memories
         actor_output = self._actor(inputs=states)
-        log_prob = self.policy.log_prob(actor_output, actions)
+        log_prob = self.get_policy().log_prob(actor_output, actions)
         log_prob = tf.reshape(log_prob, (-1, 1))
         if self._critic is not None:
             critic_values = self._critic(states)
@@ -129,10 +129,10 @@ class VPG(Agent):
         else:
             policy_loss = -tf.reduce_sum((log_prob * returns))
             critic_loss = 0
-        entropy_loss = self._entropy_coef * tf.reduce_mean(self.policy.entropy(actor_output))
+        entropy_loss = self._entropy_coef * tf.reduce_mean(self.get_policy().entropy(actor_output))
         return policy_loss, critic_loss, entropy_loss
 
-    def _train(self, batch_size=None):
+    def _train(self, batch_size=None, *args, **kwargs):
         # convert inputs to tf tensors and compute returns
         states = self._trajectory['states']
         actions = self._trajectory['actions']

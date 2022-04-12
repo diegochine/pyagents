@@ -43,10 +43,10 @@ class SharedBackboneACNetwork(Network):
         self._policy_head = PolicyNetwork(state_shape=features_shape,
                                           action_shape=action_shape,
                                           output=distribution,
-                                          fc_layer_params=None,
+                                          fc_params=None,
                                           dtype=dtype)
         self._critic_head = ValueNetwork(state_shape=features_shape,
-                                         fc_layer_params=None,
+                                         fc_params=None,
                                          dtype=dtype)
 
     def get_policy(self):
