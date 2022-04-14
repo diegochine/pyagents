@@ -8,6 +8,7 @@ from argparse import ArgumentParser
 import wandb
 
 from pyagents.agents import DQNAgent, VPG, A2C, DDPG
+from pyagents.layers import RescalingLayer
 from pyagents.networks import DiscreteQNetwork, PolicyNetwork, ValueNetwork, SharedBackboneACNetwork, ACNetwork
 from pyagents.memory import PrioritizedBuffer, UniformBuffer
 import tensorflow as tf
@@ -233,7 +234,7 @@ def train_a2c_agent(test_ver, n_episodes=1000, max_steps=250,
 
 
 @gin.configurable
-def train_ddpg_agent(test_ver, n_episodes=1000,
+def train_ddpg_agent(test_ver, n_episodes=1000, scaling=2.0,
                      batch_size=128, a_learning_rate=5e-4, c_learning_rate=1e-3, steps_to_train=25,
                      max_steps=250, min_memories=50000, output_dir="./output/", wandb_params=None):
     is_testing = (test_ver >= 0)
@@ -248,6 +249,8 @@ def train_ddpg_agent(test_ver, n_episodes=1000,
     buffer = UniformBuffer()
     pi_params = {'bounds': bounds,
                  'out_params': {'activation': 'tanh'}}
+    if scaling is not None:
+        pi_params['action_processing_layer'] = RescalingLayer(scaling_factor=scaling)
     q_params = {}
     ac = ACNetwork(state_shape=state_size, action_shape=action_size,
                    pi_out='continuous', pi_params=pi_params, q_params=q_params)
@@ -260,7 +263,7 @@ def train_ddpg_agent(test_ver, n_episodes=1000,
                                 'critic_learning_rate': c_learning_rate})
         player.memory_init(env, max_steps, min_memories)
     else:
-        player = DDPG.load('output/ddpg', ver=3, training=False)
+        player = DDPG.load('output/ddpg', ver=test_ver, training=False)
     if player.is_logging:
         wandb.define_metric('score', step_metric="episode", summary="max")
     scores = []
@@ -277,7 +280,7 @@ def train_ddpg_agent(test_ver, n_episodes=1000,
         done = False
 
         while not done and step < max_steps:
-            if is_testing:
+            if is_testing or True:
                 env.render()
             a_t = player.act(s_t.reshape(1, -1))[0]
             s_tp1, r_t, done, info = env.step(a_t)

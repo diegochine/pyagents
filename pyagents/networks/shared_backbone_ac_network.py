@@ -59,7 +59,7 @@ class SharedBackboneACNetwork(Network):
 
     def call(self, inputs, training=True, mask=None):
         state = self._backbone(inputs, training=training)
-        dist_params = self._policy_head(state)
+        act, dist_params = self._policy_head(state)
         critic_value = self._critic_head(state)
-        return dist_params, critic_value
+        return (act, dist_params), critic_value
 

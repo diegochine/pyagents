@@ -121,7 +121,7 @@ class DDPG(OffPolicyAgent):
         assert dones.shape == (batch_size, 1), f"expected rewards with shape (batch, 1), received: {dones.shape}"
 
         # Compute targets
-        act = self._ac_target.pi(next_states) * self._ac_target.pi.get_policy().scaling_factor  # TODO remove and do it better
+        act, _ = self._ac_target.pi(next_states)
         q_preds = self._ac_target.critic((next_states, act))  # Q_targ(s', pi_targ(s'))
         targets = rewards + self.gamma * (1 - dones) * q_preds
 
@@ -138,10 +138,9 @@ class DDPG(OffPolicyAgent):
         self._critic_opt.apply_gradients(critic_grads_and_vars)
 
         # Gradient ascent step for policy
-        factor = self._ac.pi.get_policy().scaling_factor   # TODO remove and do it better
         with tf.GradientTape(watch_accessed_variables=False) as pi_tape:
             pi_tape.watch(self._ac.pi.trainable_variables)
-            pi_preds = self._ac.pi(states) * factor
+            pi_preds, _ = self._ac.pi(states)
             pi_loss = - tf.reduce_mean(self._ac.critic((states, pi_preds)))
         assert not tf.math.is_inf(pi_loss) and not tf.math.is_nan(pi_loss)
         pi_grads = pi_tape.gradient(pi_loss, self._ac.pi.trainable_variables)

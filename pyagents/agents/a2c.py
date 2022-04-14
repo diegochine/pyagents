@@ -119,9 +119,9 @@ class A2C(Agent):
 
     def _loss(self, memories):
         states, actions, delta = memories
-        actor_out, critic_values = self._actor_critic(inputs=states)
-        log_prob = self._policy.log_prob(actor_out, actions)
-        entropy_loss = tf.reduce_sum(self._policy.entropy(actor_out))
+        (_, dist_params), critic_values = self._actor_critic(inputs=states)
+        log_prob = self._policy.log_prob(dist_params, actions)
+        entropy_loss = tf.reduce_sum(self._policy.entropy(dist_params))
         policy_loss = -tf.reduce_sum((log_prob * (delta - tf.stop_gradient(critic_values))))
         critic_loss = self._critic_loss_fn(delta, critic_values)
         return policy_loss, critic_loss, entropy_loss

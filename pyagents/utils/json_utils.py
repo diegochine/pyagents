@@ -11,6 +11,8 @@ import wrapt
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import tensor_shape
 
+import pyagents.layers
+
 try:
     # This import only works on python 3.3 and above.
     import collections.abc as collections_abc  # pylint: disable=unused-import, g-import-not-at-top
@@ -33,7 +35,7 @@ def get_json_type(obj):
     # if obj is a serializable Keras class instance
     # e.g. optimizer, layer
     if hasattr(obj, 'get_config'):
-        return {'class_name': obj.__class__.__name__, 'config': obj.config()}
+        return {'class_name': obj.__class__.__name__, 'config': obj.get_config()}
 
     # if obj is any numpy type
     if type(obj).__module__ == np.__name__:
@@ -79,10 +81,12 @@ def decode(json_string):
 
 
 def _decode_helper(obj):
-    """A decoding helper that is TF-object aware."""
+    """A decoding helper that is TF-object and pyagents-object aware."""
     if isinstance(obj, dict) and 'class_name' in obj:
         if obj['class_name'] == 'TensorShape':
             return tensor_shape.TensorShape(obj['items'])
+        elif obj['class_name'] == 'RescalingLayer':
+            return pyagents.layers.RescalingLayer(**obj['config'])
         elif obj['class_name'] == '__tuple__':
             return tuple(_decode_helper(i) for i in obj['items'])
         elif obj['class_name'] == '__ellipsis__':
