@@ -260,7 +260,7 @@ def train_ddpg_agent(test_ver, n_episodes=1000,
                                 'critic_learning_rate': c_learning_rate})
         player.memory_init(env, max_steps, min_memories)
     else:
-        player = DDPG.load('output/ddpg', ver=3, training=False)
+        player = DDPG.load('output/ddpg', ver=test_ver, training=False)
     if player.is_logging:
         wandb.define_metric('score', step_metric="episode", summary="max")
     scores = []
