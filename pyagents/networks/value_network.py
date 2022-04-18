@@ -1,6 +1,6 @@
 import gin
 import tensorflow as tf
-from pyagents.networks.network import Network
+from pyagents.networks.network import Network, NetworkOutput
 from pyagents.networks.encoding_network import EncodingNetwork
 
 
@@ -47,5 +47,5 @@ class ValueNetwork(Network):
         else:
             state = inputs
         value = self._value_head(state, training=training)
-        return value
+        return NetworkOutput(critic_values=value)
 

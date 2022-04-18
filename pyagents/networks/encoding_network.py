@@ -48,6 +48,8 @@ class EncodingNetwork(Network):
                                               dtype=dtype))
 
         layers.append(tf.keras.layers.Flatten())
+        if not dropout_params:
+            dropout_params = None
         if dropout_params is None or isinstance(dropout_params, float):
             dropout_params = [dropout_params] * len(fc_params)
         else:

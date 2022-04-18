@@ -20,12 +20,12 @@ class A2C(Agent):
                  state_shape: tuple,
                  action_shape: tuple,
                  actor_critic: SharedBackboneACNetwork,
-                 opt: tf.keras.optimizers.Optimizer,
+                 opt: tf.keras.optimizers.Optimizer = None,
                  policy: Policy = None,
                  gamma: types.Float = 0.99,
                  standardize: bool = True,
                  n_step_return: int = 1,
-                 lam_gae: float = 1,
+                 lam_gae: float = 0.9,
                  acc_grads_steps: int = 0,
                  entropy_coef: types.Float = 1e-3,
                  gradient_clip_norm: Optional[types.Float] = 0.5,
@@ -46,7 +46,7 @@ class A2C(Agent):
             gamma: (Optional) Discount factor. Defaults to 0.5.
             standardize: (Optional) If True, standardizes delta before computing gradient update. Defaults to True.
             n_step_return: (Optional) Number of steps before computing multi-step returns. Defaults to 1.
-            lam_gae: (Optional) Lambda for Generalized Advantage Estimation. # TODO not implemented
+            lam_gae: (Optional) Lambda for Generalized Advantage Estimation. Defaults to 0.9.
             acc_grads_steps: (Optional) Simulates A3C asynchronous parallel learning
               by accumulating gradients over multiple backward passes. Defaults to 0 (no accumulation).
             entropy_coef: (Optional) Coefficient applied to entropy loss. Defaults to 1e-3.
@@ -119,43 +119,45 @@ class A2C(Agent):
 
     def _loss(self, memories):
         states, actions, delta = memories
-        (_, dist_params), critic_values = self._actor_critic(inputs=states)
-        log_prob = self._policy.log_prob(dist_params, actions)
-        entropy_loss = tf.reduce_sum(self._policy.entropy(dist_params))
-        policy_loss = -tf.reduce_sum((log_prob * (delta - tf.stop_gradient(critic_values))))
-        critic_loss = self._critic_loss_fn(delta, critic_values)
+        ac_out = self._actor_critic(inputs=states)
+        log_prob = self._policy.log_prob(ac_out.dist_params, actions)
+        entropy_loss = tf.reduce_sum(self._policy.entropy(ac_out.dist_params))
+        policy_loss = -tf.reduce_sum((log_prob * (delta - tf.stop_gradient(ac_out.critic_values))))
+        critic_loss = self._critic_loss_fn(delta, ac_out.critic_values)
         return policy_loss, critic_loss, entropy_loss
 
-    def _compute_n_step_returns(self, next_state: np.ndarray, done: bool) -> tf.Tensor:
+    def _compute_gae(self) -> tf.Tensor:
         rewards = self._trajectory['rewards']
-        returns = np.empty_like(rewards)
-        if done:
-            disc_r = 0
-        else:
-            next_state = tf.convert_to_tensor(next_state.reshape(1, *next_state.shape))
-            _, disc_r = self._actor_critic(next_state)
-            disc_r = float(disc_r)
-        for i, r_k in enumerate(rewards[::-1]):
-            k = len(returns) - i - 1
-            disc_r += (self.gamma ** k) * r_k
-            returns[k] = disc_r
-        return tf.convert_to_tensor(returns, dtype=tf.float32)
+        dones = 1 - tf.convert_to_tensor(self._trajectory['dones'], dtype=tf.float32)
+        # convert states to tensors and add batch dimension
+        state_values = self._actor_critic(tf.stack(self._trajectory['states'])).critic_values
+        next_state_values = self._actor_critic(tf.stack(self._trajectory['next_states'])).critic_values
+        returns = np.zeros(len(rewards) + 1)
+        for t in reversed(range(len(rewards))):
+            v_t = state_values[t]
+            v_tp1 = next_state_values[t]
+            delta = rewards[t] + (self.gamma * dones[t] + v_tp1) - v_t
+            returns[t] = delta + (self.gamma * self._lam_gae * returns[t + 1] * dones[t])
+        return tf.convert_to_tensor(returns[:-1], dtype=tf.float32)
 
     def _train(self, batch_size=None, *args, **kwargs) -> dict:
-        done, next_state = self._trajectory['dones'][-1], self._trajectory['next_states'][-1]
-        if done or len(self._trajectory['rewards']) == self._n_step_return:  # perform training step
+        if len(self._trajectory['rewards']) >= batch_size:  # perform training step
             states = tf.convert_to_tensor(self._trajectory['states'], dtype=tf.float32)
             actions = tf.convert_to_tensor(self._trajectory['actions'], dtype=tf.float32)
 
-            delta = tf.stop_gradient(self._compute_n_step_returns(next_state, done))
+            delta = tf.stop_gradient(self._compute_gae())
             if self._standardize:
                 delta = ((delta - tf.math.reduce_mean(delta)) / (tf.math.reduce_std(delta) + self.eps))
-            # train
+
+            # TODO shuffle minibatch?
+
+            # forward pass and loss computation
             with tf.GradientTape() as tape:
                 policy_loss, critic_loss, entropy_loss = self._loss((states, actions, tf.stop_gradient(delta)))
                 loss = policy_loss + critic_loss - self._entropy_coef * entropy_loss
+            assert not tf.math.is_inf(loss) and not tf.math.is_nan(loss), f'{policy_loss, critic_loss, entropy_loss}'
 
-            assert not tf.math.is_inf(loss) and not tf.math.is_nan(loss)
+            # backward pass
             grads = tape.gradient(loss, self._actor_critic.trainable_variables)
             if self._gradient_clip_norm is not None:
                 grads, norm = tf.clip_by_global_norm(grads, self._gradient_clip_norm)
@@ -165,6 +167,7 @@ class A2C(Agent):
                 self._acc_grads += np.array(grads)
 
             # simulate A3C async update of gradients by multiple parallel learners
+            # FIXME maybe we can remove this, feels useless, must test
             if self._steps_last_update == self._acc_grads_steps:
                 self._opt.apply_gradients(list(zip(self._acc_grads, self._actor_critic.trainable_variables)))
                 self._steps_last_update = 0

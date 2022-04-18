@@ -21,7 +21,7 @@ class GaussianPolicy(Policy):
         self._bounds = bounds
 
     def _act(self, obs, deterministic=True, mask=None, training=True):
-        _, (mean, std_dev) = self._policy_network(obs.reshape(1, *obs.shape))
+        mean, std_dev = self._policy_network(obs.reshape(1, *obs.shape)).dist_params
         mean, std_dev = mean.numpy().squeeze(axis=1), std_dev.numpy().squeeze(axis=1)
         if deterministic:
             action = mean

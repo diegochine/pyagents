@@ -11,5 +11,5 @@ class DirichletLayer(tf.keras.layers.Layer):
 
     def call(self, x, training=True):
         alpha = self._actor_alpha(x)
-        eps = tf.where(alpha < 0.3, 0.3, 0)
-        return alpha + eps
+        alpha += tf.where(alpha < 0.2, 0.2, 0)  # values too close to 0 make everything explode
+        return tfp.distributions.Dirichlet(alpha).sample(), alpha

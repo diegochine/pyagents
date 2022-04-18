@@ -6,4 +6,4 @@ DQNAgent.epsilon_decay = 0.999
 DQNAgent.target_update_period = 50
 DQNAgent.loss_fn = 'mse'
 
-QNetwork.fc_layer_params = (16, 8)
+QNetwork.fc_params = (16, 8)

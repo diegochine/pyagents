@@ -3,7 +3,7 @@ from typing import Optional, Iterable, Union
 import gin
 import numpy as np
 import tensorflow as tf
-from pyagents.networks.network import Network
+from pyagents.networks.network import Network, NetworkOutput
 from pyagents.networks.encoding_network import EncodingNetwork
 from pyagents.layers import GaussianLayer, DirichletLayer, SoftmaxLayer
 from pyagents.policies import GaussianPolicy, DirichletPolicy, SoftmaxPolicy, FixedPolicy
@@ -117,7 +117,7 @@ class PolicyNetwork(Network):
         config.update(self._config)
         return config
 
-    def call(self, inputs, training=True, mask=None):
+    def call(self, inputs, training=True, mask=None) -> NetworkOutput:
         if self._encoder is not None:
             state = self._encoder(inputs, training=training)
         else:
@@ -133,4 +133,5 @@ class PolicyNetwork(Network):
         if self._bounds is not None:
             lb, ub = self._bounds
             action = tf.clip_by_value(action, lb, ub)
-        return action, dist_params
+        return NetworkOutput(action=action,
+                             dist_params=dist_params)

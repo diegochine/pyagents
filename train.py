@@ -18,7 +18,7 @@ import gin
 
 @gin.configurable
 def train_dqn_agent(test_ver, n_episodes=1000, batch_size=128, learning_rate=0.001, steps_to_train=4, buffer='uniform',
-                    max_steps=500, min_memories=30000, output_dir="./output/", wandb_params=None):
+                    episode_max_steps=500, min_memories=30000, output_dir="./output/", wandb_params=None):
     is_testing = (test_ver >= 0)
     env = gym.make('CartPole-v1')
     state_size = env.observation_space.shape[0]
@@ -41,16 +41,16 @@ def train_dqn_agent(test_ver, n_episodes=1000, batch_size=128, learning_rate=0.0
     scores = []
     movavg100 = []
     eps_history = []
-    player.memory_init(env, max_steps, min_memories)
+    player.memory_init(env, episode_max_steps, min_memories)
 
-    for episode in range(1, n_episodes + 1):
+    for episode in range(1, n_episodes + 1):  # TODO switch to training_steps
 
         s_t = env.reset()
         s_t = np.reshape(s_t, player.state_shape)
         step = 0
         done = False
 
-        while not done and step < max_steps:
+        while not done and step < episode_max_steps:
             if is_testing:
                 env.render()
             a_t = player.act(s_t)
@@ -68,25 +68,24 @@ def train_dqn_agent(test_ver, n_episodes=1000, batch_size=128, learning_rate=0.0
         this_episode_score = np.mean(scores[-100:])
         movavg100.append(this_episode_score)
         eps_history.append(player.get_policy().epsilon)
-        if episode % 10 == 0:
-            print(f'EPISODE: {episode:4d}/{n_episodes:4d}, '
-                  f'SCORE: {this_episode_score:3.0f}, '
-                  f'LOSS: {losses["td_loss"]:3.2f}',
-                  f'EPS: {player.get_policy().epsilon:.2f}')
+        print(f'EPISODE: {episode:4d}/{n_episodes:4d}, '
+              f'SCORE: {this_episode_score:3.0f}, '
+              f'LOSS: {losses["td_loss"]:3.2f}',
+              f'EPS: {player.get_policy().epsilon:.2f}')
 
         if player.is_logging:
             wandb.log({'score': scores[-1], 'episode': episode, 'eps': player.get_policy().epsilon})
 
         player.train(batch_size)
 
-        if (episode % 1) == 0:
-            player.save(ver=episode // 1)
+        if (episode % 10) == 0:
+            player.save(ver=episode // 10)
 
     return scores, movavg100, eps_history
 
 
 @gin.configurable
-def train_vpg_agent(test_ver, n_episodes=1000, max_steps=250,
+def train_vpg_agent(test_ver, n_episodes=1000, episode_max_steps=250,
                     actor_learning_rate=1e-4, critic_learning_rate=1e-3, schedule=True,
                     output_dir="./output/", wandb_params=None):
     is_testing = (test_ver >= 0)
@@ -124,7 +123,7 @@ def train_vpg_agent(test_ver, n_episodes=1000, max_steps=250,
     scores = []
     movavg100 = []
 
-    for episode in range(1, n_episodes + 1):
+    for episode in range(1, n_episodes + 1):  # TODO switch to training_steps
 
         s_t = env.reset()
         s_t = np.reshape(s_t, player.state_shape)
@@ -132,7 +131,7 @@ def train_vpg_agent(test_ver, n_episodes=1000, max_steps=250,
         score = 0
         done = False
 
-        while not done and step < max_steps:
+        while not done and step < episode_max_steps:
             if is_testing:
                 env.render()
             a_t = player.act(s_t)
@@ -157,19 +156,18 @@ def train_vpg_agent(test_ver, n_episodes=1000, max_steps=250,
             log_str += f',POLICY LOSS: {losses["policy_loss"]:4.2f}, CRITIC LOSS: {losses["critic_loss"]:5.2f}'
         print(log_str)
 
-        if (episode % 100) == 0:
-            player.save(ver=episode//100)
+        if (episode % 10) == 0:
+            player.save(ver=episode//10)
 
     return scores, movavg100
 
 
 @gin.configurable
-def train_a2c_agent(test_ver, n_episodes=1000, max_steps=250,
-                    learning_rate=1e-3, schedule=True,
+def train_a2c_agent(env, test_ver, total_training_steps=10**5, episode_max_steps=250,
+                    learning_rate=1e-3, schedule=True, batch_size=64,
                     output_dir="./output/", wandb_params=None):
     is_testing = (test_ver >= 0)
-    env = gym.make('CartPole-v1')
-    state_shape = env.observation_space.shape[0]
+    state_shape = env.observation_space.shape
     action_shape = (env.action_space.n,)
 
     if not os.path.exists(output_dir):
@@ -177,7 +175,7 @@ def train_a2c_agent(test_ver, n_episodes=1000, max_steps=250,
 
     ac_net = SharedBackboneACNetwork(state_shape, action_shape, distribution='softmax')
     if schedule:
-        lr = tf.keras.optimizers.schedules.PolynomialDecay(learning_rate, n_episodes * 50, learning_rate / 100)
+        lr = tf.keras.optimizers.schedules.PolynomialDecay(learning_rate, total_training_steps, learning_rate / 100)
     else:
         lr = learning_rate
     opt = Adam(learning_rate=lr)
@@ -191,52 +189,58 @@ def train_a2c_agent(test_ver, n_episodes=1000, max_steps=250,
         wandb.define_metric('score', step_metric="episode", summary="max")
     scores = []
     movavg100 = []
+    episode = 0
+    training_step = 0
 
-    for episode in range(1, n_episodes + 1):
-
+    while training_step <= total_training_steps:
+        episode += 1
         s_t = env.reset()
         s_t = np.reshape(s_t, player.state_shape)
-        step = 0
+        episode_step = 0
         score = 0
         done = False
         losses = None
 
-        while not done and step < max_steps:
-            if is_testing:
+        while not done and episode_step < episode_max_steps:
+            if is_testing or True:
                 env.render()
             a_t = player.act(s_t)
             s_tp1, r_t, done, info = env.step(a_t)
-            r_t = r_t if not done else -(200 - step)
+            r_t = r_t if not done else -(200 - episode_step)/10
             s_tp1 = np.reshape(s_tp1, player.state_shape)
             player.remember(state=s_t, action=a_t, reward=r_t, next_state=s_tp1, done=done)
             s_t = s_tp1
-            step += 1
+            episode_step += 1
             score += r_t
             if not is_testing:
-                loss_info = player.train()
+                # TODO in "what matters for on policy rl" dicono che è importante usare la stessa traiettoria per più updates
+                loss_info = player.train(batch_size)
+                training_step += 1
                 losses = loss_info if loss_info is not None else losses
 
-        scores.append(step)
+        scores.append(episode_step)
         this_episode_score = np.mean(scores[-100:])
         movavg100.append(this_episode_score)
         if player.is_logging:
-            wandb.log({'score': step, 'episode': episode})
+            wandb.log({'score': episode_step, 'episode': episode})
         if not is_testing and losses is not None:
-            loss_str = f', POLICY LOSS: {losses["policy_loss"]:4.2f}, CRITIC LOSS: {losses["critic_loss"]:5.2f}'
+            loss_str = f', POLICY LOSS: {losses["policy_loss"]:4.2f}, ' \
+                       f'CRITIC LOSS: {losses["critic_loss"]:4.2f}, ' \
+                       f'ENTROPY LOSS: {losses["entropy_loss"]:4.2f}'
         else:
             loss_str = ''
-        print(f'EPISODE: {episode:4d}/{n_episodes:4d}, SCORE: {this_episode_score:3.0f}' + loss_str)
+        print(f'STEP: {training_step:4d}/{total_training_steps:4d}, SCORE: {this_episode_score:3.0f}' + loss_str)
 
-        if (episode % 100) == 0:
-            player.save(ver=episode//100)
+        if (episode % 10) == 0:
+            player.save(ver=episode//10)
 
     return scores, movavg100
 
 
 @gin.configurable
-def train_ddpg_agent(test_ver, n_episodes=1000, scaling=2.0,
-                     batch_size=128, a_learning_rate=5e-4, c_learning_rate=1e-3, steps_to_train=25,
-                     max_steps=250, min_memories=50000, output_dir="./output/", wandb_params=None):
+def train_ddpg_agent(test_ver, total_training_steps=10**5, scaling=2.0,
+                     batch_size=128, a_learning_rate=5e-4, c_learning_rate=1e-3, train_every=25,
+                     episode_max_steps=250, min_memories=50000, output_dir="./output/", wandb_params=None):
     is_testing = (test_ver >= 0)
     env = gym.make('Pendulum-v1')
     state_size = env.observation_space.shape
@@ -261,7 +265,7 @@ def train_ddpg_agent(test_ver, n_episodes=1000, scaling=2.0,
                       action_bounds=bounds, name='ddpg', wandb_params=wandb_params,
                       log_dict={'actor_learning_rate': a_learning_rate,
                                 'critic_learning_rate': c_learning_rate})
-        player.memory_init(env, max_steps, min_memories)
+        player.memory_init(env, episode_max_steps, min_memories)
     else:
         player = DDPG.load('output/ddpg', ver=test_ver, training=False)
     if player.is_logging:
@@ -270,43 +274,43 @@ def train_ddpg_agent(test_ver, n_episodes=1000, scaling=2.0,
     movavg100 = []
     pi_losses = []
     q_losses = []
+    episode = 0
+    training_step = 0
 
-    for episode in range(1, n_episodes + 1):
-
+    while training_step <= total_training_steps:
+        episode += 1
         s_t = env.reset()
         s_t = np.reshape(s_t, player.state_shape)
-        step = 0
+        episode_step = 0
         score = 0
         done = False
 
-        while not done and step < max_steps:
-            if is_testing or True:
+        while not done and episode_step < episode_max_steps:
+            if is_testing:
                 env.render()
             a_t = player.act(s_t.reshape(1, -1))[0]
             s_tp1, r_t, done, info = env.step(a_t)
-            # r_t = r_t if not done else -100
             s_tp1 = np.reshape(s_tp1, player.state_shape)
             player.remember(state=s_t, action=a_t, reward=r_t, next_state=s_tp1, done=done)
             s_t = s_tp1
 
-            if not is_testing and step % steps_to_train == 0:
-                for _ in range(steps_to_train):
+            if not is_testing and training_step % train_every == 0:
+                for _ in range(train_every):
                     losses = player.train(batch_size)
                     pi_losses.append(losses['policy_loss'])
                     q_losses.append(losses['critic_loss'])
-            step += 1
+            episode_step += 1
             score += r_t
 
         scores.append(score)
         movavg_score = np.mean(scores[-100:])
         movavg100.append(movavg_score)
-        if episode % 1 == 0:
-            print(f'EPISODE: {episode:4d}/{n_episodes:4d}, '
-                  f'SCORE: {scores[-1]:5.0f} (MOVAVG {movavg_score:5.0f}), '
-                  f'POLICY LOSS: {np.mean(pi_losses):3.2f}, ',
-                  f'Q LOSS: {np.mean(q_losses):3.2f}')
-            pi_losses = []
-            q_losses = []
+        print(f'EPISODE: {episode:4d}/{total_training_steps:4d}, '
+              f'SCORE: {scores[-1]:5.0f} (MOVAVG {movavg_score:5.0f}), '
+              f'POLICY LOSS: {np.mean(pi_losses):3.2f}, ',
+              f'Q LOSS: {np.mean(q_losses):3.2f}')
+        pi_losses = []
+        q_losses = []
 
         if player.is_logging:
             wandb.log({'score': scores[-1], 'episode': episode})
@@ -315,6 +319,7 @@ def train_ddpg_agent(test_ver, n_episodes=1000, scaling=2.0,
             player.train(batch_size)
             if (episode % 10) == 0:
                 player.save(ver=episode // 10)
+            training_step += 1
 
     return scores, movavg100
 
@@ -333,6 +338,8 @@ if __name__ == "__main__":
     parser.add_argument('-tv', '--test-ver', type=int, default=-1,
                         help='if -1, trains; if >=0, performs evaluation using this version')
     args = parser.parse_args()
+    env = gym.make('CartPole-v1')
+    env = gym.wrappers.NormalizeObservation(env)  # TODO update all training functions to accept env from outside
     if args.config:
         gin.parse_config_file(args.config)
     if args.agent == 'dqn':
@@ -340,7 +347,7 @@ if __name__ == "__main__":
     elif args.agent == 'vpg':
         info = train_vpg_agent(test_ver=args.test_ver)
     elif args.agent == 'a2c':
-        info = train_a2c_agent(test_ver=args.test_ver)
+        info = train_a2c_agent(env=env, test_ver=args.test_ver)
     elif args.agent == 'ddpg':
         info = train_ddpg_agent(test_ver=args.test_ver)
     else:

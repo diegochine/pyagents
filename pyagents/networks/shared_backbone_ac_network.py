@@ -1,6 +1,6 @@
 import gin
 import tensorflow as tf
-from pyagents.networks.network import Network
+from pyagents.networks.network import Network, NetworkOutput
 from pyagents.networks.encoding_network import EncodingNetwork
 from pyagents.networks.policy_network import PolicyNetwork
 from pyagents.networks.value_network import ValueNetwork
@@ -57,9 +57,10 @@ class SharedBackboneACNetwork(Network):
         config.update(self._config)
         return config
 
-    def call(self, inputs, training=True, mask=None):
+    def call(self, inputs, training=True, mask=None) -> NetworkOutput:
         state = self._backbone(inputs, training=training)
-        act, dist_params = self._policy_head(state)
-        critic_value = self._critic_head(state)
-        return (act, dist_params), critic_value
-
+        pi_out = self._policy_head(state)
+        critic_out = self._critic_head(state)
+        return NetworkOutput(action=pi_out.action,
+                             dist_params=pi_out.dist_params,
+                             critic_values=critic_out.critic_values)

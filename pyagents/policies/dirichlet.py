@@ -21,7 +21,7 @@ class DirichletPolicy(Policy):
         self._bounds = bounds
 
     def _act(self, obs, deterministic=False, mask=None, training=True):
-        alpha = self._policy_network(obs.reshape(1, *obs.shape))
+        alpha = self._policy_network(obs.reshape(1, *obs.shape)).dist_params
         alpha = alpha.numpy().squeeze(axis=0)  # FIXME why whis squeeze?
         if deterministic:
             raise NotImplementedError()

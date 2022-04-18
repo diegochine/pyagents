@@ -12,5 +12,5 @@ class SoftmaxLayer(tf.keras.layers.Layer):
     def call(self, x, training=True):
         preferences = self._preferences(x)
         probs = self._softmax(preferences)
-        action = tf.math.argmax(probs)
+        action = tf.math.argmax(probs, axis=1)
         return action, probs

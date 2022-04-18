@@ -11,9 +11,8 @@ class SoftmaxPolicy(Policy):
         self._policy_network = policy_network
 
     def _act(self, obs, deterministic=False, mask=None, training=True):
-        _, probs = self._policy_network(obs.reshape(1, *obs.shape))
-        if isinstance(probs, tuple):
-            probs, _ = probs  # network is actor-critic network, outputting both probs and values
+        pi_out = self._policy_network(obs.reshape(1, *obs.shape))
+        probs = pi_out.dist_params
         probs = probs.numpy().squeeze(axis=0)
         if deterministic:
             return np.argmax(probs)
