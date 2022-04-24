@@ -45,45 +45,59 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=1e-3, buffer='unifo
         crit_learning_rate = crit_start_learning_rate
     state_shape = env.observation_space.shape
     if algo == 'dqn':
-        action_size = env.action_space.n
+        assert isinstance(env.action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
+        action_shape = env.action_space.n
         buffer = PrioritizedBuffer() if buffer == 'prioritized' else UniformBuffer()
-        q_net = DiscreteQNetwork(state_shape, action_size)
+        q_net = DiscreteQNetwork(state_shape, action_shape)
         optim = Adam(learning_rate=act_learning_rate)
-        agent = DQNAgent(state_shape, action_size, q_network=q_net, buffer=buffer, optimizer=optim,
+        agent = DQNAgent(state_shape, action_shape, q_network=q_net, buffer=buffer, optimizer=optim,
                          name='dqn', wandb_params=wandb_params, save_dir=output_dir,
                          log_dict={'learning_rate': act_start_learning_rate})
-
     elif algo == 'vpg':
-        action_size = (env.action_space.n,)
-        a_net = PolicyNetwork(state_shape, action_size, output='softmax')
+        if isinstance(env.action_space, gym.spaces.Discrete):
+            action_shape = (env.action_space.n,)
+            output = 'softmax'
+            bounds = None
+        else:
+            action_shape = env.action_space.shape
+            output = 'beta'
+            bounds = (env.action_space.low, env.action_space.high)
+        a_net = PolicyNetwork(state_shape, action_shape, output=output, bounds=bounds)
         v_net = ValueNetwork(state_shape)
         a_opt = get_optimizer(learning_rate=act_learning_rate)
         v_opt = get_optimizer(learning_rate=crit_learning_rate)
-        agent = VPG(state_shape, action_size,
+        agent = VPG(state_shape, action_shape,
                     actor=a_net, critic=v_net, actor_opt=a_opt, critic_opt=v_opt,
                     name='vpg', wandb_params=wandb_params, save_dir=output_dir,
                     log_dict={'actor_learning_rate': act_start_learning_rate,
                               'critic_learning_rate': crit_start_learning_rate})
     elif algo == 'a2c':
-        action_shape = (env.action_space.n,)
-        ac_net = SharedBackboneACNetwork(state_shape, action_shape, output='softmax')
+        if isinstance(env.action_space, gym.spaces.Discrete):
+            action_shape = (env.action_space.n,)
+            output = 'softmax'
+            bounds = None
+        else:
+            action_shape = env.action_space.shape
+            output = 'beta'
+            bounds = (env.action_space.low, env.action_space.high)
+        ac_net = SharedBackboneACNetwork(state_shape, action_shape, output=output, bounds=bounds)
         opt = get_optimizer(learning_rate=act_learning_rate)
         agent = A2C(state_shape, action_shape, actor_critic=ac_net, opt=opt,
                     name='a2c', wandb_params=wandb_params, save_dir=output_dir,
                     log_dict={'learning_rate': act_start_learning_rate})
-
     elif algo == 'ddpg':
-        action_size = env.action_space.shape
+        assert isinstance(env.action_space, gym.spaces.Box), 'DDPG only works in continuous spaces'
+        action_shape = env.action_space.shape
         bounds = (env.action_space.low, env.action_space.high)
         buffer = PrioritizedBuffer() if buffer == 'prioritized' else UniformBuffer()
         pi_params = {'bounds': bounds, 'scaling': scaling,
                      'out_params': {'activation': 'tanh'}}
         q_params = {}
-        ac = ACNetwork(state_shape=state_shape, action_shape=action_size,
+        ac = ACNetwork(state_shape=state_shape, action_shape=action_shape,
                        pi_out='continuous', pi_params=pi_params, q_params=q_params)
         a_opt = get_optimizer(learning_rate=act_learning_rate)
         c_opt = get_optimizer(learning_rate=crit_learning_rate)
-        agent = DDPG(state_shape, action_size, actor_critic=ac, buffer=buffer, actor_opt=a_opt, critic_opt=c_opt,
+        agent = DDPG(state_shape, action_shape, actor_critic=ac, buffer=buffer, actor_opt=a_opt, critic_opt=c_opt,
                      action_bounds=bounds, name='ddpg', wandb_params=wandb_params, save_dir=output_dir,
                      log_dict={'actor_learning_rate': act_start_learning_rate,
                                'critic_learning_rate': crit_start_learning_rate})

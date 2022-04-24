@@ -20,6 +20,7 @@ class SharedBackboneACNetwork(Network):
                  fc_params=(64, 64),
                  dropout_params=None,
                  activation='relu',
+                 bounds=None,
                  name='ActorCriticNetwork',
                  trainable=True,
                  dtype=tf.float32):
@@ -31,6 +32,7 @@ class SharedBackboneACNetwork(Network):
                         'dropout_params': dropout_params if dropout_params else [],
                         'activation': activation,
                         'name': name,
+                        'bounds': bounds,
                         'output': output}
         self._backbone = EncodingNetwork(
             state_shape=state_shape,
@@ -45,6 +47,7 @@ class SharedBackboneACNetwork(Network):
                                           action_shape=action_shape,
                                           output=output,
                                           fc_params=None,
+                                          bounds=bounds,
                                           dtype=dtype)
         self._critic_head = ValueNetwork(state_shape=features_shape,
                                          fc_params=None,

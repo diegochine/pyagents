@@ -22,11 +22,11 @@ class DirichletPolicy(Policy):
 
     def _act(self, obs, deterministic=False, mask=None, training=True):
         alpha = self._policy_network(obs.reshape(1, *obs.shape)).dist_params
-        alpha = alpha.numpy().squeeze(axis=0)  # FIXME why whis squeeze?
+        alpha = alpha.numpy()
         if deterministic:
             raise NotImplementedError()
         else:
-            action = np.random.dirichlet(alpha)
+            action = np.array([np.random.dirichlet(alpha[0])])  # to keep batch dim
         action *= self.scaling_factor
         if self._bounds is not None:
             action = np.clip(action, self._bounds[0], self._bounds[1])

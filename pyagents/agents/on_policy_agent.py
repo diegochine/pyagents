@@ -76,6 +76,7 @@ class OnPolicyAgent(Agent, ABC):
             v_tp1 = next_state_values[t]
             delta = rewards[t] + (self.gamma * dones[t] + v_tp1) - v_t
             returns[t] = delta + (self.gamma * self._lam_gae * returns[t + 1] * dones[t])
-        return tf.convert_to_tensor(returns[:-1], dtype=tf.float32)
+        returns = tf.convert_to_tensor(returns[:-1], dtype=tf.float32)
+        return tf.reshape(returns, (-1, 1))
 
 

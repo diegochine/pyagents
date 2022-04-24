@@ -111,20 +111,6 @@ class A2C(OnPolicyAgent):
         critic_loss = self._critic_loss_fn(delta, ac_out.critic_values)
         return policy_loss, critic_loss, entropy_loss
 
-    def _compute_gae(self) -> tf.Tensor:
-        rewards = self._trajectory['rewards']
-        dones = 1 - tf.convert_to_tensor(self._trajectory['dones'], dtype=tf.float32)
-        # convert states to tensors and add batch dimension
-        state_values = self._actor_critic(tf.stack(self._trajectory['states'])).critic_values
-        next_state_values = self._actor_critic(tf.stack(self._trajectory['next_states'])).critic_values
-        returns = np.zeros(len(rewards) + 1)
-        for t in reversed(range(len(rewards))):
-            v_t = state_values[t]
-            v_tp1 = next_state_values[t]
-            delta = rewards[t] + (self.gamma * dones[t] + v_tp1) - v_t
-            returns[t] = delta + (self.gamma * self._lam_gae * returns[t + 1] * dones[t])
-        return tf.convert_to_tensor(returns[:-1], dtype=tf.float32)
-
     def _train(self, batch_size=None, *args, **kwargs) -> dict:
         states = tf.convert_to_tensor(self._current_trajectory.states, dtype=tf.float32)
         actions = tf.convert_to_tensor(self._current_trajectory.actions, dtype=tf.float32)
