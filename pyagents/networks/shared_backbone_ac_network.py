@@ -15,9 +15,9 @@ class SharedBackboneACNetwork(Network):
     def __init__(self,
                  state_shape,
                  action_shape,
-                 distribution='beta',
-                 conv_layer_params=None,
-                 fc_layer_params=(64, 64),
+                 output='beta',
+                 conv_params=None,
+                 fc_params=(64, 64),
                  dropout_params=None,
                  activation='relu',
                  name='ActorCriticNetwork',
@@ -26,23 +26,24 @@ class SharedBackboneACNetwork(Network):
         super(SharedBackboneACNetwork, self).__init__(name, trainable, dtype)
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
-                        'conv_layer_params': conv_layer_params if conv_layer_params else [],
-                        'fc_layer_params': fc_layer_params if fc_layer_params else [],
+                        'conv_params': conv_params if conv_params else [],
+                        'fc_params': fc_params if fc_params else [],
                         'dropout_params': dropout_params if dropout_params else [],
                         'activation': activation,
-                        'name': name}
+                        'name': name,
+                        'output': output}
         self._backbone = EncodingNetwork(
             state_shape=state_shape,
-            conv_params=conv_layer_params,
-            fc_params=fc_layer_params,
+            conv_params=conv_params,
+            fc_params=fc_params,
             dropout_params=dropout_params,
             activation=activation,
             dtype=dtype
         )
-        features_shape = (fc_layer_params[-1],)  # output shape from encoder
+        features_shape = (fc_params[-1],)  # output shape from encoder
         self._policy_head = PolicyNetwork(state_shape=features_shape,
                                           action_shape=action_shape,
-                                          output=distribution,
+                                          output=output,
                                           fc_params=None,
                                           dtype=dtype)
         self._critic_head = ValueNetwork(state_shape=features_shape,

@@ -1,4 +1,5 @@
-train_dqn_agent.buffer = 'uniform'
+get_agent.buffer = 'uniform'
+train_agent.init_params = {"min_memories": 100000}
 
 DQNAgent.gamma = 0.99
 DQNAgent.epsilon = 1.0

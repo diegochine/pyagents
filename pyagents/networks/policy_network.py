@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 from pyagents.networks.network import Network, NetworkOutput
 from pyagents.networks.encoding_network import EncodingNetwork
-from pyagents.layers import GaussianLayer, DirichletLayer, SoftmaxLayer
+from pyagents.layers import GaussianLayer, DirichletLayer, SoftmaxLayer, RescalingLayer
 from pyagents.policies import GaussianPolicy, DirichletPolicy, SoftmaxPolicy, FixedPolicy
 
 
@@ -23,8 +23,7 @@ class PolicyNetwork(Network):
                  activation: str = 'relu',
                  out_params: Optional[dict] = None,
                  bounds: Optional[tuple] = None,
-                 action_processing_layer: Optional[tf.keras.layers.Layer] = None,
-                 action_noise: float = 0.0,
+                 scaling: Optional[float] = None,
                  name: str = 'ActorNetwork',
                  trainable: bool = True,
                  dtype=tf.float32):
@@ -45,24 +44,23 @@ class PolicyNetwork(Network):
             bounds: (Optional) Bounds of action space. Default to None (unbounded space).
             action_processing_layer: (Optional) Optional tf.keras.Layer to process action, e.g. performing rescaling.
               Defaults to None.
-            action_noise: (Optional)
             name:  Name of the network. Defaults to 'ActorNetwork'.
             trainable: if True, network is trainable. Defaults to True.
             dtype: Network dtype. Defaults to tf.float32.
         """
         super(PolicyNetwork, self).__init__(name, trainable, dtype)
-        if out_params is None:
-            out_params = {}
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
                         'conv_params': conv_params if conv_params else [],
                         'fc_params': fc_params if fc_params else [],
                         'dropout_params': dropout_params if dropout_params else [],
                         'activation': activation,
-                        'action_noise': action_noise,  # TODO dove viene usato?
                         'output': output,
+                        'scaling': scaling,
                         'out_params': out_params,
                         'name': name}
+        if out_params is None:
+            out_params = {}
         if conv_params is None and fc_params is None:
             self._encoder = None
         else:
@@ -87,7 +85,11 @@ class PolicyNetwork(Network):
             self._out_layer = SoftmaxLayer(features_shape, action_shape, **out_params)
         else:
             raise ValueError(f'unknown output type {output}')
-        self._act_layer = action_processing_layer
+
+        if scaling is not None:
+            self._act_layer = RescalingLayer(scaling_factor=scaling)
+        else:
+            self._act_layer = None
 
     def get_policy(self, caller=None):
         """Returns a Policy object that represents the this network's current policy."""

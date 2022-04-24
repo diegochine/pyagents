@@ -5,15 +5,14 @@ import gin
 import numpy as np
 import tensorflow as tf
 import wandb
-from pyagents.agents import Agent
-from pyagents.memory import load_memories
+from pyagents.agents.on_policy_agent import OnPolicyAgent
 from pyagents.networks import SharedBackboneACNetwork
 from pyagents.policies import Policy
 from pyagents.utils import types
 
 
 @gin.configurable
-class A2C(Agent):
+class A2C(OnPolicyAgent):
     """ An agent implementing a synchronous, deterministic version of the A3C algorithm """
 
     def __init__(self,
@@ -26,7 +25,6 @@ class A2C(Agent):
                  standardize: bool = True,
                  n_step_return: int = 1,
                  lam_gae: float = 0.9,
-                 acc_grads_steps: int = 0,
                  entropy_coef: types.Float = 1e-3,
                  gradient_clip_norm: Optional[types.Float] = 0.5,
                  training: bool = True,
@@ -81,22 +79,19 @@ class A2C(Agent):
         self._standardize = standardize
         self._gradient_clip_norm = gradient_clip_norm
 
-        self._trajectory = {'states': [], 'actions': [], 'rewards': [], 'next_states': [], 'dones': []}
-        self._steps_last_update = 0
-        self._acc_grads_steps = acc_grads_steps
-        self._acc_grads = None
-
         self.config.update({
             'gamma': self.gamma,
             'n_step_return': self._n_step_return,
-            'entropy_coef': self._entropy_coef,
-            **{f'actor_critic/{k}': v for k, v in self._actor_critic.get_config().items()}
+            'entropy_coef': self._entropy_coef
         })
-        if log_dict is not None:
-            self.config.update(**log_dict)
 
         if wandb_params:
-            self._init_logger(wandb_params)
+            if log_dict is None:
+                log_dict = {}
+            self._init_logger(wandb_params,
+                              {**self.config,
+                               **{f'actor_critic/{k}': v for k, v in self._actor_critic.get_config().items()},
+                               **log_dict})
 
     def _wandb_define_metrics(self):
         """Defines WandB metrics.
@@ -107,21 +102,11 @@ class A2C(Agent):
         wandb.define_metric('critic_loss', step_metric="train_step", summary="min")
         wandb.define_metric('entropy_loss', step_metric="train_step", summary="min")
 
-    def clear_memory(self):
-        self._trajectory = {'states': [], 'actions': [], 'rewards': [], 'next_states': [], 'dones': []}
-
-    def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool) -> None:
-        self._trajectory['states'].append(state)
-        self._trajectory['actions'].append(action)
-        self._trajectory['rewards'].append(reward)
-        self._trajectory['next_states'].append(next_state)
-        self._trajectory['dones'].append(done)
-
     def _loss(self, memories):
         states, actions, delta = memories
         ac_out = self._actor_critic(inputs=states)
         log_prob = self._policy.log_prob(ac_out.dist_params, actions)
-        entropy_loss = tf.reduce_sum(self._policy.entropy(ac_out.dist_params))
+        entropy_loss = self._entropy_coef * tf.reduce_sum(self._policy.entropy(ac_out.dist_params))
         policy_loss = -tf.reduce_sum((log_prob * (delta - tf.stop_gradient(ac_out.critic_values))))
         critic_loss = self._critic_loss_fn(delta, ac_out.critic_values)
         return policy_loss, critic_loss, entropy_loss
@@ -141,44 +126,33 @@ class A2C(Agent):
         return tf.convert_to_tensor(returns[:-1], dtype=tf.float32)
 
     def _train(self, batch_size=None, *args, **kwargs) -> dict:
-        if len(self._trajectory['rewards']) >= batch_size:  # perform training step
-            states = tf.convert_to_tensor(self._trajectory['states'], dtype=tf.float32)
-            actions = tf.convert_to_tensor(self._trajectory['actions'], dtype=tf.float32)
+        states = tf.convert_to_tensor(self._current_trajectory.states, dtype=tf.float32)
+        actions = tf.convert_to_tensor(self._current_trajectory.actions, dtype=tf.float32)
 
-            delta = tf.stop_gradient(self._compute_gae())
-            if self._standardize:
-                delta = ((delta - tf.math.reduce_mean(delta)) / (tf.math.reduce_std(delta) + self.eps))
+        # GAE computation
+        state_values = self._actor_critic(tf.stack(self._current_trajectory.states)).critic_values
+        next_state_values = self._actor_critic(tf.stack(self._current_trajectory.next_states)).critic_values
+        delta = tf.stop_gradient(self.compute_gae(state_values, next_state_values))
+        if self._standardize:
+            delta = ((delta - tf.math.reduce_mean(delta)) / (tf.math.reduce_std(delta) + self.eps))
 
-            # TODO shuffle minibatch?
+        # TODO shuffle minibatch?
 
-            # forward pass and loss computation
-            with tf.GradientTape() as tape:
-                policy_loss, critic_loss, entropy_loss = self._loss((states, actions, tf.stop_gradient(delta)))
-                loss = policy_loss + critic_loss - self._entropy_coef * entropy_loss
-            assert not tf.math.is_inf(loss) and not tf.math.is_nan(loss), f'{policy_loss, critic_loss, entropy_loss}'
+        # forward pass and loss computation
+        with tf.GradientTape() as tape:
+            policy_loss, critic_loss, entropy_loss = self._loss((states, actions, tf.stop_gradient(delta)))
+            loss = policy_loss + critic_loss - entropy_loss
+        assert not tf.math.is_inf(loss) and not tf.math.is_nan(loss), f'{policy_loss, critic_loss, entropy_loss}'
 
-            # backward pass
-            grads = tape.gradient(loss, self._actor_critic.trainable_variables)
-            if self._gradient_clip_norm is not None:
-                grads, norm = tf.clip_by_global_norm(grads, self._gradient_clip_norm)
-            if self._acc_grads is None:
-                self._acc_grads = np.array(grads)
-            else:
-                self._acc_grads += np.array(grads)
-
-            # simulate A3C async update of gradients by multiple parallel learners
-            # FIXME maybe we can remove this, feels useless, must test
-            if self._steps_last_update == self._acc_grads_steps:
-                self._opt.apply_gradients(list(zip(self._acc_grads, self._actor_critic.trainable_variables)))
-                self._steps_last_update = 0
-                self._acc_grads = None
-            else:
-                self._steps_last_update += 1
-
-            self.clear_memory()
-            return {'policy_loss': float(policy_loss),
-                    'critic_loss': float(critic_loss),
-                    'entropy_loss': float(entropy_loss)}
+        # backward pass
+        grads = tape.gradient(loss, self._actor_critic.trainable_variables)
+        if self._gradient_clip_norm is not None:
+            grads, norm = tf.clip_by_global_norm(grads, self._gradient_clip_norm)
+        self._opt.apply_gradients(list(zip(grads, self._actor_critic.trainable_variables)))
+        self.clear_memory()
+        return {'policy_loss': float(policy_loss),
+                'critic_loss': float(critic_loss),
+                'entropy_loss': float(entropy_loss)}
 
     def _networks_config_and_weights(self):
         net_config = self._actor_critic.get_config()

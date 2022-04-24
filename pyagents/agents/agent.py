@@ -51,7 +51,7 @@ class Agent(tf.Module, abc.ABC):
         self._action_shape = action_shape
         self._training = training
         self._save_memories = save_memories
-        self._save_dir = os.path.join(save_dir, name)
+        self._save_dir = save_dir
         if not os.path.isdir(self._save_dir):
             os.makedirs(self._save_dir)
         self._wandb_run = None
@@ -73,6 +73,14 @@ class Agent(tf.Module, abc.ABC):
     @property
     def config(self) -> dict:
         return self._config
+
+    @property
+    def on_policy(self):
+        raise NotImplementedError('Subclasses must define on_policy property')
+
+    @property
+    def off_policy(self):
+        return not self.on_policy
 
     def get_policy(self) -> Policy:
         return self._policy
@@ -105,10 +113,8 @@ class Agent(tf.Module, abc.ABC):
         self._log_dict = {}
         self.is_logging = True
 
-    def _initialize(self):
-        pass
-
-    def initialize(self):
+    def init(self, *args, **kwargs):
+        """Performs additional initialization, such as collecting memories for off-policy agents"""
         pass
 
     def act(self, state: np.ndarray, mask: Optional[np.ndarray] = None):
@@ -205,15 +211,16 @@ class Agent(tf.Module, abc.ABC):
         try:
             agent_group = f.create_group('agent')
             for k, v in self._config.items():
-                agent_group.attrs[k] = v
+                if v is not None:
+                    agent_group.attrs[k] = v
 
             for net_name, net_config, net_weights in self._networks_config_and_weights():
                 net_config_group = f.create_group(f'{net_name}_config')
                 for k, v in net_config.items():
-                    if isinstance(v, (dict, list, tuple)):  # FIXME sto dumps non funziona dio cane
+                    if isinstance(v, (dict, list, tuple)):
                         v = json.dumps(v, default=json_utils.get_json_type).encode('utf8')
                         net_config_group.attrs.create(k, np.void(v))
-                    else:
+                    elif v is not None:
                         net_config_group.attrs[k] = v
 
                 net_weights_group = f.create_group(f'{net_name}_weights')
@@ -258,7 +265,7 @@ class Agent(tf.Module, abc.ABC):
                 # if hasattr(i, 'decode'):
                 #     i = i.decode('utf-8')
                 # i = json_utils.decode(i)
-                k,v = i
+                k, v = i
                 if isinstance(v, np.void):
                     net_config[k] = json_utils.decode(v.tobytes())
                 else:

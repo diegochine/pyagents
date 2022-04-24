@@ -66,7 +66,7 @@ class DDPG(OffPolicyAgent):
         self._ac_target = deepcopy(self._ac)
         self._actor_opt = actor_opt
         self._critic_opt = critic_opt
-        self._critic_loss_fn = tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM_OVER_BATCH_SIZE)
+        self._critic_loss_fn = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM_OVER_BATCH_SIZE)
 
         if policy is None:
             p = self._ac.get_policy()
@@ -88,6 +88,8 @@ class DDPG(OffPolicyAgent):
         })
 
         if wandb_params:
+            if log_dict is None:
+                log_dict = {}
             self._init_logger(wandb_params,
                               {**self.config,
                                **{f'actor_critic/{k}': v for k, v in self._ac.get_config().items()},
