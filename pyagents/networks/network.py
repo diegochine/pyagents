@@ -1,6 +1,11 @@
 from abc import ABC, abstractmethod
+from collections import namedtuple
 
 import tensorflow as tf
+
+NetworkOutput = namedtuple('NetworkOutput',
+                           ('action', 'dist_params', 'critic_values'),
+                           defaults=(None, None, None))  # applies from rightmost parameter, only action is required
 
 
 class Network(tf.keras.layers.Layer, ABC):
@@ -9,7 +14,7 @@ class Network(tf.keras.layers.Layer, ABC):
         super(Network, self).__init__(name=name, trainable=trainable, dtype=dtype)
 
     @abstractmethod
-    def call(self, inputs, training=None, mask=None):
+    def call(self, inputs, training=None, mask=None) -> NetworkOutput:
         pass
 
     @classmethod

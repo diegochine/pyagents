@@ -1,42 +1,66 @@
+from typing import Optional, Iterable, Union
+
 import gin
 import numpy as np
 import tensorflow as tf
-from pyagents.networks.network import Network
+from pyagents.networks.network import Network, NetworkOutput
 from pyagents.networks.encoding_network import EncodingNetwork
-from pyagents.layers import GaussianLayer, DirichletLayer, SoftmaxLayer
+from pyagents.layers import GaussianLayer, DirichletLayer, SoftmaxLayer, RescalingLayer
 from pyagents.policies import GaussianPolicy, DirichletPolicy, SoftmaxPolicy, FixedPolicy
 
 
 @gin.configurable
 class PolicyNetwork(Network):
+    """A Network representing pi(a | s, Theta)"""
 
     def __init__(self,
-                 state_shape,
-                 action_shape,
-                 output='gaussian',
-                 conv_params=None,
-                 fc_params=(64, 64),
-                 dropout_params=None,
-                 activation='relu',
-                 out_params=None,
-                 bounds=None,
-                 action_noise=0.1,
-                 name='ActorNetwork',
-                 trainable=True,
+                 state_shape: tuple,
+                 action_shape: tuple,
+                 output: str = 'gaussian',
+                 conv_params: Optional[Iterable] = None,
+                 fc_params: Optional[Iterable[int]] = (64, 64),
+                 dropout_params: Optional[Union[float, Iterable[float]]] = None,
+                 activation: str = 'relu',
+                 out_params: Optional[dict] = None,
+                 bounds: Optional[tuple] = None,
+                 scaling: Optional[float] = None,
+                 name: str = 'ActorNetwork',
+                 trainable: bool = True,
                  dtype=tf.float32):
+        """Creates a Policy Network.
+
+        Args:
+            state_shape: Tuple representing the shape of the input space (observations).
+            action_shape: Tuple representing the shape of the action space.
+            output: Output distribution of network, either 'continuous' (no distribution parametrization),
+              'gaussian', 'dirichlet' or 'softmax'.
+            conv_params: (Optional) Iterable of hyperparameters for hidden convolutional layers in encoder network.
+              Defaults to None (no conv used).
+            fc_params: (Optional) Number of units for each hidden fully connected layer in encoder network.
+              Defaults to (64, 64).
+            dropout_params: (Optional) Dropout hyperparameters for encoder network. Defaults to None (no dropout).
+            activation: (Optional) Name of activation function of encoder network. Defaults to 'relu'.
+            out_params: (Optional) Additional parameters for output layer. Defaults to None.
+            bounds: (Optional) Bounds of action space. Default to None (unbounded space).
+            action_processing_layer: (Optional) Optional tf.keras.Layer to process action, e.g. performing rescaling.
+              Defaults to None.
+            name:  Name of the network. Defaults to 'ActorNetwork'.
+            trainable: if True, network is trainable. Defaults to True.
+            dtype: Network dtype. Defaults to tf.float32.
+        """
         super(PolicyNetwork, self).__init__(name, trainable, dtype)
-        if out_params is None:
-            out_params = {}
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
                         'conv_params': conv_params if conv_params else [],
                         'fc_params': fc_params if fc_params else [],
                         'dropout_params': dropout_params if dropout_params else [],
                         'activation': activation,
-                        'action_noise': action_noise,
                         'output': output,
+                        'scaling': scaling,
                         'out_params': out_params,
                         'name': name}
+        if out_params is None:
+            out_params = {}
         if conv_params is None and fc_params is None:
             self._encoder = None
         else:
@@ -47,20 +71,28 @@ class PolicyNetwork(Network):
                 dropout_params=dropout_params,
                 activation=activation,
             )
-        self._bounds = bounds if bounds is not None else (-np.inf, np.inf)
+        self._bounds = bounds
         self._output_type = output
         features_shape = (fc_params[-1],) if fc_params is not None else state_shape  # input shape for out
         if output == 'continuous':
             self._out_layer = tf.keras.layers.Dense(action_shape[0], **out_params,
                                                     kernel_initializer=tf.random_uniform_initializer(minval=-0.003, maxval=0.003))
         elif output == 'gaussian':
-            self._out_layer = GaussianLayer(features_shape, action_shape)
+            self._out_layer = GaussianLayer(features_shape, action_shape, **out_params)
         elif output == 'beta':
-            self._out_layer = DirichletLayer(features_shape, action_shape)
+            self._out_layer = DirichletLayer(features_shape, action_shape, **out_params)
         elif output == 'softmax':
-            self._out_layer = SoftmaxLayer(features_shape, action_shape)
+            self._out_layer = SoftmaxLayer(features_shape, action_shape, **out_params)
+        else:
+            raise ValueError(f'unknown output type {output}')
+
+        if scaling is not None:
+            self._act_layer = RescalingLayer(scaling_factor=scaling)
+        else:
+            self._act_layer = None
 
     def get_policy(self, caller=None):
+        """Returns a Policy object that represents the this network's current policy."""
         # caller parameter is used when this network is not the main network (eg when used as policy head)
         if self._output_type == 'continuous':
             return FixedPolicy(state_shape=self._config['state_shape'],
@@ -87,10 +119,21 @@ class PolicyNetwork(Network):
         config.update(self._config)
         return config
 
-    def call(self, inputs, training=True, mask=None):
+    def call(self, inputs, training=True, mask=None) -> NetworkOutput:
         if self._encoder is not None:
             state = self._encoder(inputs, training=training)
         else:
             state = inputs
-        dist_params = self._out_layer(state, training=training)
-        return dist_params
+        output = self._out_layer(state, training=training)
+        if self._output_type in ('gaussian', 'beta', 'softmax'):
+            action, dist_params = output
+        else:
+            action = output
+            dist_params = None
+        if self._act_layer is not None:
+            action = self._act_layer(action)
+        if self._bounds is not None:
+            lb, ub = self._bounds
+            action = tf.clip_by_value(action, lb, ub)
+        return NetworkOutput(action=action,
+                             dist_params=dist_params)

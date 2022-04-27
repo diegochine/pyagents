@@ -1,8 +1,9 @@
-train_vpg_agent.actor_learning_rate = 1e-3
-train_vpg_agent.critic_learning_rate = 3e-3
-train_vpg_agent.schedule = True
+get_agent.act_start_learning_rate = 1e-3
+get_agent.crit_start_learning_rate = 2e-3
+get_agent.schedule = True
+train_agent.steps_to_train = 100
 
 VPG.gamma = 0.99
-VPG.critic_value_coef = 0.2
-VPG.entropy_coef = 1e-3
-VPG.gradient_clip_norm = 0.5
+VPG.critic_value_coef = 0.5
+VPG.entropy_coef = 0
+VPG.gradient_clip_norm = 0.25

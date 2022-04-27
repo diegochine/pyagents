@@ -30,18 +30,24 @@ class OffPolicyAgent(Agent, ABC):
             self._memory: Buffer = UniformBuffer(save_dir=self._save_dir)
 
     @property
+    def on_policy(self):
+        return False
+
+    @property
     def memory_len(self):
         return len(self._memory)
 
-    def memory_init(self, env, max_steps, min_memories, actions=None):
+    def init(self, env, max_steps=2000, min_memories=None, actions=None):
         print('Collecting initial memories')
+        if min_memories is None:
+            min_memories = self._memory.get_config()['size_long']
         while self.memory_len < min_memories:
             s = env.reset()
             done = False
             step = 0
             self._memory.commit_ltmemory()
             while not done and step < max_steps:
-                if actions:
+                if actions is not None:
                     a = np.random.choice(actions, 1)
                 else:
                     a = env.action_space.sample()

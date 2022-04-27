@@ -1,6 +1,6 @@
 import gin
 import tensorflow as tf
-from pyagents.networks.network import Network
+from pyagents.networks.network import Network, NetworkOutput
 from pyagents.networks.policy_network import PolicyNetwork
 from pyagents.networks.qnetwork import QNetwork
 
@@ -53,7 +53,10 @@ class ACNetwork(Network):
         config.update(self._config)
         return config
 
-    def call(self, inputs, training=True, mask=None):
-        act = self.get_policy().act(inputs, training=training)
-        critic_value = self._critic_net((inputs, act))
-        return act, critic_value
+    def call(self, inputs, training=True, mask=None) -> NetworkOutput:
+        pi_out = self._policy_net(inputs, training=training)
+        act = pi_out.action
+        critic_out = self._critic_net((inputs, act), training=training)
+        return NetworkOutput(action=act,
+                             dist_params=pi_out.dist_params,
+                             critic_values=critic_out.critic_values)

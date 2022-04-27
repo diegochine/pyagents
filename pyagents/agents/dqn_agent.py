@@ -133,7 +133,7 @@ class DQNAgent(OffPolicyAgent):
         # the following only for epsgreedy policies
         # TODO make it more generic
         self._policy.update_eps()
-        return {'td_loss': float(loss)}
+        return {'q_loss': float(loss)}
 
     def _minibatch_to_tf(self, minibatch):
         """ Given a list of experience tuples (s_t, a_t, r_t, s_t+1, done_t)

@@ -1,18 +1,27 @@
-train_ddpg_agent.steps_to_train = 1
-train_ddpg_agent.batch_size = 64
-train_ddpg_agent.a_learning_rate = 1e-3
-train_ddpg_agent.c_learning_rate = 2e-3
+get_agent.act_start_learning_rate = 1e-3
+get_agent.crit_start_learning_rate = 2e-3
+get_agent.schedule = True
 
-PolicyNetwork.fc_params = (256, 256)
+train_agent.steps_to_train = 1
+train_agent.update_rounds = 1
+train_agent.batch_size = 128
+train_agent.init_params = {"min_memories": 150000}
+train_agent.episode_max_steps = 1000
+
+UniformBuffer.size_long = 250000
+
+PolicyNetwork.fc_params = (128, 128)
 PolicyNetwork.dropout_params = 0.1
 
-FixedPolicy.scaling_factor = 2.0
-
-QNetwork.obs_fc_params = (16, 32)
-QNetwork.obs_dropout_params = 0.05
+QNetwork.obs_fc_params = (32, 64)
+QNetwork.obs_dropout_params = 0.1
 QNetwork.act_fc_params = (32, )
 QNetwork.fc_params = (256, 256)
 QNetwork.dropout_params = 0.1
 QNetwork.dueling = False
 
-DDPG.tau = 0.1
+DDPG.tau = 0.05
+
+NormalNoisePolicy.stddev = 0.5
+NormalNoisePolicy.decay = 0.98
+NormalNoisePolicy.stddev_min = 0.15

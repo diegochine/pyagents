@@ -14,7 +14,7 @@ class QPolicy(Policy):
         if mask is not None:
             assert isinstance(mask, np.ndarray)
             qvals = tf.where(mask, qvals, np.NINF)
-        return np.argmax(qvals)
+        return np.argmax(qvals, keepdims=True)[0]
 
     def _distribution(self, obs):
         qvals = self._q_network(obs.reshape(1, *obs.shape))

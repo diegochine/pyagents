@@ -2,7 +2,7 @@ import gin
 import tensorflow as tf
 
 from pyagents.layers.qlayer import QLayer
-from pyagents.networks.network import Network
+from pyagents.networks.network import Network, NetworkOutput
 from pyagents.networks.encoding_network import EncodingNetwork
 
 
@@ -60,7 +60,7 @@ class QNetwork(Network):
             action = self._act_encoder(action, training=training)
         state_action = tf.concat([state, action], axis=1)
         q_values = self._q_layer(state_action, training=training)
-        return q_values
+        return NetworkOutput(critic_values=q_values)
 
     def get_config(self):
         config = super().get_config()

@@ -12,15 +12,13 @@ class FixedPolicy(Policy):
                  state_shape,
                  action_shape,
                  policy_network,
-                 scaling_factor: types.Float = 1.0,
                  bounds: tuple = None):
         super(FixedPolicy, self).__init__(state_shape, action_shape)
         self._policy_network = policy_network
-        self.scaling_factor = scaling_factor
         self.bounds = bounds
     
     def _act(self, obs, **kwargs):
-        a = self._policy_network(obs) * self.scaling_factor
+        action = self._policy_network(obs, **kwargs).action
         if self.bounds is not None:
-            a = np.clip(a, self.bounds[0], self.bounds[1])
-        return a
+            action = np.clip(action, self.bounds[0], self.bounds[1])
+        return action

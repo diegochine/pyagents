@@ -66,7 +66,7 @@ class DDPG(OffPolicyAgent):
         self._ac_target = deepcopy(self._ac)
         self._actor_opt = actor_opt
         self._critic_opt = critic_opt
-        self._critic_loss_fn = tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM_OVER_BATCH_SIZE)
+        self._critic_loss_fn = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM_OVER_BATCH_SIZE)
 
         if policy is None:
             p = self._ac.get_policy()
@@ -88,6 +88,8 @@ class DDPG(OffPolicyAgent):
         })
 
         if wandb_params:
+            if log_dict is None:
+                log_dict = {}
             self._init_logger(wandb_params,
                               {**self.config,
                                **{f'actor_critic/{k}': v for k, v in self._ac.get_config().items()},
@@ -121,14 +123,17 @@ class DDPG(OffPolicyAgent):
         assert dones.shape == (batch_size, 1), f"expected rewards with shape (batch, 1), received: {dones.shape}"
 
         # Compute targets
-        act = self._ac_target.pi(next_states) * self._ac_target.pi.get_policy().scaling_factor  # TODO remove and do it better
-        q_preds = self._ac_target.critic((next_states, act))  # Q_targ(s', pi_targ(s'))
+        pi_target_out = self._ac_target.pi(next_states)
+        act = pi_target_out.action
+        c_target_out = self._ac_target.critic((next_states, act))  # Q_targ(s', pi_targ(s'))
+        q_preds = c_target_out.critic_values
         targets = rewards + self.gamma * (1 - dones) * q_preds
 
         # Gradient descent step for Q function on MSBE loss
         with tf.GradientTape(watch_accessed_variables=False) as q_tape:
             q_tape.watch(self._ac.critic.trainable_variables)
-            q_loss = (tf.stop_gradient(targets) - self._ac.critic((states, actions))) ** 2
+            q_values = self._ac.critic((states, actions)).critic_values
+            q_loss = (tf.stop_gradient(targets) - q_values) ** 2
             q_loss = tf.reduce_mean(q_loss)
         assert not tf.math.is_inf(q_loss) and not tf.math.is_nan(q_loss)
         critic_grads = q_tape.gradient(q_loss, self._ac.critic.trainable_variables)
@@ -138,11 +143,10 @@ class DDPG(OffPolicyAgent):
         self._critic_opt.apply_gradients(critic_grads_and_vars)
 
         # Gradient ascent step for policy
-        factor = self._ac.pi.get_policy().scaling_factor   # TODO remove and do it better
         with tf.GradientTape(watch_accessed_variables=False) as pi_tape:
             pi_tape.watch(self._ac.pi.trainable_variables)
-            pi_preds = self._ac.pi(states) * factor
-            pi_loss = - tf.reduce_mean(self._ac.critic((states, pi_preds)))
+            pi_preds = self._ac.pi(states).action
+            pi_loss = - tf.reduce_mean(self._ac.critic((states, pi_preds)).critic_values)
         assert not tf.math.is_inf(pi_loss) and not tf.math.is_nan(pi_loss)
         pi_grads = pi_tape.gradient(pi_loss, self._ac.pi.trainable_variables)
         if self._gradient_clip_norm is not None:
