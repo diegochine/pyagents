@@ -107,7 +107,7 @@ class Agent(tf.Module, abc.ABC):
         wandb.login(key=wandb_params['key'])
         self._wandb_run = wandb.init(
             project=wandb_params['project'], entity=wandb_params['entity'], group=wandb_params['group'],
-            reinit=True, config=config, tags=wandb_params['tags'])
+            reinit=True, config=config, tags=wandb_params['tags'], monitor_gym=True)
         wandb.define_metric('train_step', summary='max')
         self._wandb_define_metrics()
         self._log_dict = {}
@@ -147,7 +147,7 @@ class Agent(tf.Module, abc.ABC):
             self._log_dict = {}
 
     @abc.abstractmethod
-    def _train(self, batch_size: Optional[int], *args, **kwargs) -> dict:
+    def _train(self, batch_size: int, update_rounds: int, *args, **kwargs) -> dict:
         """Performs training step.
 
         Subclasses must implement this method.
@@ -159,16 +159,17 @@ class Agent(tf.Module, abc.ABC):
         """
         pass
 
-    def train(self, batch_size: Optional[int] = None, *args, **kwargs):
+    def train(self, batch_size: int, update_rounds: int, *args, **kwargs):
         """Performs training step, and eventually logs loss values.
 
         Subclasses must not override this method, but must implement _train().
         Args:
-            batch_size: (Optional)
+            batch_size:
+            update_rounds:
         Returns:
             dict of losses
         """
-        losses_dict = self._train(batch_size, *args, **kwargs)
+        losses_dict = self._train(batch_size, update_rounds, *args, **kwargs)
         if self._wandb_run is not None:
             self._log(**losses_dict)
         return losses_dict

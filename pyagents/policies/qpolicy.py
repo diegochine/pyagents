@@ -9,6 +9,10 @@ class QPolicy(Policy):
         super().__init__(state_shape, action_shape)
         self._q_network = q_network
 
+    @property
+    def is_discrete(self):
+        return True
+
     def _act(self, obs, mask=None, training=True):
         qvals = self._q_network(obs.reshape(1, *obs.shape))
         if mask is not None:

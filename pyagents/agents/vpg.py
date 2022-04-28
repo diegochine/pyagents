@@ -26,6 +26,7 @@ class VPG(OnPolicyAgent):
                  policy: Policy = None,
                  gamma: types.Float = 0.99,
                  standardize: bool = True,
+                 lam_gae: float = 0.9,
                  critic_value_coef: types.Float = 0.5,
                  entropy_coef: types.Float = 0,
                  gradient_clip_norm: Optional[float] = None,
@@ -49,7 +50,8 @@ class VPG(OnPolicyAgent):
                     policy: (Optional) The policy the agent should follow. Defaults to policy network's policy.
                     gamma: (Optional) Discount factor. Defaults to 0.5.
                     standardize: (Optional) If True, standardizes delta before computing gradient update.
-                      Defaults to True.
+                      Defaults to False.
+                    lam_gae: (Optional) Lambda for Generalized Advantage Estimation. Defaults to 0.9.
                     entropy_coef: (Optional) Coefficient applied to entropy loss. Defaults to 1e-3.
                     gradient_clip_norm: (Optional) Global norm for gradient clipping, pass None to disable.
                       Defaults to 0.5.
@@ -59,7 +61,8 @@ class VPG(OnPolicyAgent):
                     name: (Optional) Name of the agent.
                     wandb_params: (Optional) Dict of parameters to enable WandB logging. Defaults to None.
                 """
-        super(VPG, self).__init__(state_shape, action_shape, training=training, save_dir=save_dir, name=name)
+        super(VPG, self).__init__(state_shape, action_shape, lam_gae=lam_gae,
+                                  training=training, save_dir=save_dir, name=name)
         if actor_opt is None and training:
             raise ValueError('agent cannot be trained without optimizer')
 
@@ -69,7 +72,7 @@ class VPG(OnPolicyAgent):
         if self._baseline is not None:
             assert critic_opt is not None or not training, 'must provide a critic optimizer when providing a critic network'
         self._critic_opt = critic_opt
-        self._critic_loss_fn = tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)
+        self._critic_loss_fn = tf.keras.losses.MeanSquaredError()
 
         if policy is None:
             self._policy = self._actor.get_policy()
@@ -105,51 +108,78 @@ class VPG(OnPolicyAgent):
         wandb.define_metric('entropy_loss', step_metric="train_step", summary="min")
 
     def _loss(self, memories):
-        states, actions, returns = memories
+        states, actions, returns, delta = memories
         dist_params = self._actor(inputs=states).dist_params
         log_prob = self.get_policy().log_prob(dist_params, actions)
         log_prob = tf.reshape(log_prob, (-1, 1))
         if self._baseline is not None:
             critic_values = self._baseline(states).critic_values
-            adv = (returns - tf.stop_gradient(critic_values))
-            if self._standardize:
-                adv = ((adv - tf.math.reduce_mean(adv)) / (tf.math.reduce_std(adv) + self.eps))
-            policy_loss = -tf.reduce_sum((log_prob * adv))
+            policy_loss = -tf.reduce_mean((log_prob * delta))
             critic_loss = self._critic_value_coef * self._critic_loss_fn(returns, critic_values)
         else:
-            policy_loss = -tf.reduce_sum((log_prob * returns))
+            policy_loss = -tf.reduce_mean((log_prob * returns))
             critic_loss = 0
         entropy_loss = self._entropy_coef * tf.reduce_mean(self.get_policy().entropy(dist_params))
         return policy_loss, critic_loss, entropy_loss
 
-    def _train(self, batch_size=None, *args, **kwargs):
-        # convert inputs to tf tensors and compute returns
-        states = tf.convert_to_tensor(self._current_trajectory.states, dtype=tf.float32)
-        actions = tf.convert_to_tensor(self._current_trajectory.actions, dtype=tf.float32)
+    def _train(self, batch_size, update_rounds, *args, **kwargs):
+        # convert inputs to tf tensors and compute delta
+        states = tf.convert_to_tensor(self._memory['states'], dtype=tf.float32)
+        actions = tf.convert_to_tensor(self._memory['actions'], dtype=tf.float32)
+        states = tf.reshape(states, (self._memory_size, -1))
+        actions = tf.reshape(actions, (self._memory_size, -1))
+
         returns = self.compute_returns()
+        state_values = self._baseline(states).critic_values
+
+        if self._lam_gae > 0:
+            next_states = tf.convert_to_tensor(self._memory['next_states'], dtype=tf.float32)
+            next_states = tf.reshape(next_states, (self._memory_size, -1))
+            next_state_values = self._baseline(next_states).critic_values
+            delta = self.compute_gae(state_values=state_values, next_state_values=next_state_values)
+        else:
+            delta = returns - tf.stop_gradient(state_values)
 
         if self._standardize:
             returns = ((returns - tf.math.reduce_mean(returns)) / (tf.math.reduce_std(returns) + self.eps))
+            delta = ((delta - tf.math.reduce_mean(delta)) / (tf.math.reduce_std(delta) + self.eps))
 
-        # training: forward and loss computation
-        with tf.GradientTape(persistent=True) as tape:
-            policy_loss, critic_loss, entropy_loss = self._loss((states, actions, tf.stop_gradient(returns)))
-            loss = policy_loss + critic_loss - entropy_loss
-        assert not tf.math.is_inf(loss) and not tf.math.is_nan(loss)
+        delta = tf.reshape(delta, (self._memory_size, 1))
+        returns = tf.reshape(returns, (self._memory_size, 1))
 
-        # training: backward pass
-        actor_grads = tape.gradient(loss, self._actor.trainable_variables)
-        critic_grads = tape.gradient(loss, self._baseline.trainable_variables)
-        if self._gradient_clip_norm is not None:
-            actor_grads, actor_norm = tf.clip_by_global_norm(actor_grads, self._gradient_clip_norm)
-            critic_grads, critic_norm = tf.clip_by_global_norm(critic_grads, self._gradient_clip_norm)
-        actor_grads_and_vars = list(zip(actor_grads, self._actor.trainable_variables))
-        critic_grads_and_vars = list(zip(critic_grads, self._baseline.trainable_variables))
-        self._actor_opt.apply_gradients(actor_grads_and_vars)
-        self._critic_opt.apply_gradients(critic_grads_and_vars)
-        del tape
+        indexes = np.arange(states.shape[0])
+        for _ in range(update_rounds):
+            np.random.shuffle(indexes)
+            # training: iterate minibatches
+            for start in range(0, states.shape[0], batch_size):
+                end = start + batch_size
+                batch_indexes = indexes[start:end]
+                s_b = tf.gather(states, batch_indexes, axis=0)
+                a_b = tf.gather(actions, batch_indexes, axis=0)
+                d_b = tf.gather(delta, batch_indexes, axis=0)
+                r_b = tf.gather(returns, batch_indexes, axis=0)
+
+                # training: forward and loss computation
+                with tf.GradientTape(persistent=True) as tape:
+                    policy_loss, critic_loss, entropy_loss = self._loss((s_b, a_b,
+                                                                         tf.stop_gradient(r_b), tf.stop_gradient(d_b)))
+                    loss = policy_loss + critic_loss - entropy_loss
+                assert not tf.math.is_inf(loss) and not tf.math.is_nan(loss)
+
+                # training: backward pass
+                actor_grads = tape.gradient(loss, self._actor.trainable_variables)
+                critic_grads = tape.gradient(loss, self._baseline.trainable_variables)
+                if self._gradient_clip_norm is not None:
+                    actor_grads, actor_norm = tf.clip_by_global_norm(actor_grads, self._gradient_clip_norm)
+                    critic_grads, critic_norm = tf.clip_by_global_norm(critic_grads, self._gradient_clip_norm)
+                actor_grads_and_vars = list(zip(actor_grads, self._actor.trainable_variables))
+                critic_grads_and_vars = list(zip(critic_grads, self._baseline.trainable_variables))
+                self._actor_opt.apply_gradients(actor_grads_and_vars)
+                self._critic_opt.apply_gradients(critic_grads_and_vars)
+                del tape
+                self._train_step += 1
+
         self.clear_memory()
-        self._train_step += 1
 
         # logging
         if self.is_logging:

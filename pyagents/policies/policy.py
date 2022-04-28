@@ -38,6 +38,11 @@ class Policy(ABC):
     def _act(self, obs, **kwargs):
         pass
 
+    @property
+    @abstractmethod
+    def is_discrete(self):
+        pass
+
     def log_prob(self, output, action):
         raise NotImplementedError('Custom stochastic policy should implement log_prob() method if necessary')
 

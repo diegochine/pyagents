@@ -16,6 +16,10 @@ class FixedPolicy(Policy):
         super(FixedPolicy, self).__init__(state_shape, action_shape)
         self._policy_network = policy_network
         self.bounds = bounds
+
+    @property
+    def is_discrete(self):
+        return False
     
     def _act(self, obs, **kwargs):
         action = self._policy_network(obs, **kwargs).action

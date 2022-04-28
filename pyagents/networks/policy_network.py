@@ -20,7 +20,7 @@ class PolicyNetwork(Network):
                  conv_params: Optional[Iterable] = None,
                  fc_params: Optional[Iterable[int]] = (64, 64),
                  dropout_params: Optional[Union[float, Iterable[float]]] = None,
-                 activation: str = 'relu',
+                 activation: str = 'tanh',
                  out_params: Optional[dict] = None,
                  bounds: Optional[tuple] = None,
                  scaling: Optional[float] = None,

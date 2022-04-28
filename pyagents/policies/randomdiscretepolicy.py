@@ -2,10 +2,14 @@ import numpy as np
 from pyagents.policies.policy import Policy
 
 
-class RandomPolicy(Policy):
+class RandomDiscretePolicy(Policy):
 
     def __init__(self, state_shape, action_shape):
-        super(RandomPolicy, self).__init__(state_shape, action_shape)
+        super(RandomDiscretePolicy, self).__init__(state_shape, action_shape)
+
+    @property
+    def is_discrete(self):
+        return True
 
     def _act(self, obs, mask=None, training=True):
         return np.array([np.random.randint(self._action_shape)])

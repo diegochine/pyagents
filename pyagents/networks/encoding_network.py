@@ -1,4 +1,5 @@
 import gin
+import numpy as np
 import tensorflow as tf
 from pyagents.networks.network import Network
 
@@ -11,7 +12,7 @@ class EncodingNetwork(Network):
                  conv_params=None,
                  fc_params=None,
                  dropout_params=None,
-                 activation='relu',
+                 activation='tanh',
                  dtype=tf.float32,
                  name='EncodingNetwork',
                  conv_type='2d'):
@@ -19,7 +20,7 @@ class EncodingNetwork(Network):
         self._state_shape = state_shape
 
         # TODO improve inizialization, allow initizializer to be passed as parameter
-        kernel_initializer = tf.keras.initializers.GlorotNormal()
+        kernel_initializer = tf.keras.initializers.Orthogonal(np.sqrt(2))
 
         layers = []
 

@@ -20,8 +20,12 @@ class GaussianPolicy(Policy):
         self.scaling_factor = scaling_factor
         self._bounds = bounds
 
-    def _act(self, obs, deterministic=True, mask=None, training=True):
-        mean, std_dev = self._policy_network(obs.reshape(1, *obs.shape)).dist_params
+    @property
+    def is_discrete(self):
+        return False
+
+    def _act(self, obs, deterministic=False, mask=None, training=True):
+        mean, std_dev = self._policy_network(obs).dist_params
         mean, std_dev = mean.numpy(), std_dev.numpy()
         if deterministic:
             action = mean

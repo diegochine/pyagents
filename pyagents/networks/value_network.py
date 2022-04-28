@@ -12,7 +12,7 @@ class ValueNetwork(Network):
                  conv_params=None,
                  fc_params=(64, 64),
                  dropout_params=None,
-                 activation='relu',
+                 activation='tanh',
                  name='ValueNetwork',
                  trainable=True,
                  dtype=tf.float32):
