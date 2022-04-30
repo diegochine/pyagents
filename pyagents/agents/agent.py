@@ -126,7 +126,7 @@ class Agent(tf.Module, abc.ABC):
         """
         return self._policy.act(state, mask=mask, training=self._training)
 
-    def _loss(self, memories):
+    def _loss(self, *args, **kwargs):
         """Computes loss."""
         raise NotImplementedError("Loss not implemented.")
 
@@ -175,11 +175,18 @@ class Agent(tf.Module, abc.ABC):
         return losses_dict
 
     @abc.abstractmethod
-    def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool) -> None:
+    def remember(self,
+                 state: np.ndarray,
+                 action: np.ndarray,
+                 reward: float,
+                 next_state: np.ndarray,
+                 done: bool,
+                 *args, **kwargs) -> None:
         """Stores piece of experience in internal memory/buffer.
 
         Subclasses are expected to implement this method.
         Args:
+            done:
             state: current state s_t
             action: action a_t executed by the agent, according to current policy
             reward: reward r_(t+1) obtained by the agent following the execution of a_t in s_t

@@ -5,7 +5,7 @@ import numpy as np
 import gym
 from argparse import ArgumentParser
 
-from pyagents.agents import DQNAgent, VPG, A2C, DDPG
+from pyagents.agents import DQNAgent, VPG, A2C, DDPG, PPO
 from pyagents.networks import DiscreteQNetwork, PolicyNetwork, ValueNetwork, SharedBackboneACNetwork, ACNetwork
 from pyagents.memory import PrioritizedBuffer, UniformBuffer
 from pyagents.utils import train_agent
@@ -72,6 +72,24 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=1e-3, buffer='unifo
         a_opt = get_optimizer(learning_rate=act_learning_rate)
         v_opt = get_optimizer(learning_rate=crit_learning_rate)
         agent = VPG(state_shape, action_shape,
+                    actor=a_net, critic=v_net, actor_opt=a_opt, critic_opt=v_opt,
+                    name='vpg', wandb_params=wandb_params, save_dir=output_dir,
+                    log_dict={'actor_learning_rate': act_start_learning_rate,
+                              'critic_learning_rate': crit_start_learning_rate})
+    elif algo == 'ppo':
+        if isinstance(action_space, gym.spaces.Discrete):
+            action_shape = (action_space.n,)
+            output = 'softmax'
+            bounds = None
+        else:
+            action_shape = action_space.shape
+            output = 'gaussian'
+            bounds = (action_space.low, action_space.high)
+        a_net = PolicyNetwork(state_shape, action_shape, output=output, bounds=bounds, scaling=scaling)
+        v_net = ValueNetwork(state_shape)
+        a_opt = get_optimizer(learning_rate=act_learning_rate)
+        v_opt = get_optimizer(learning_rate=crit_learning_rate)
+        agent = PPO(state_shape, action_shape,
                     actor=a_net, critic=v_net, actor_opt=a_opt, critic_opt=v_opt,
                     name='vpg', wandb_params=wandb_params, save_dir=output_dir,
                     log_dict={'actor_learning_rate': act_start_learning_rate,

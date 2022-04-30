@@ -1,4 +1,9 @@
 from abc import ABC, abstractmethod
+from collections import namedtuple
+
+PolicyOutput = namedtuple('PolicyOutput',
+                          ('actions', 'logprobs', 'values'),
+                          defaults=(None, None))  # only actions is required
 
 
 class Policy(ABC):
@@ -8,7 +13,7 @@ class Policy(ABC):
         self._state_shape = state_shape
         self._action_shape = action_shape
 
-    def act(self, obs, mask=None, training=True):
+    def act(self, obs, mask=None, training=True) -> PolicyOutput:
         return self._act(obs, mask=mask, training=training)
 
     def distribution(self, obs):
@@ -35,7 +40,7 @@ class Policy(ABC):
         return self._action_shape
 
     @abstractmethod
-    def _act(self, obs, **kwargs):
+    def _act(self, obs, **kwargs) -> PolicyOutput:
         pass
 
     @property

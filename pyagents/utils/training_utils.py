@@ -18,10 +18,16 @@ def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
         train_info = {'avg_return': 0, 'avg_len': 0}
         episodes = 0
         for _ in range(rollout_steps):
-            a_t = agent.act(s_t)
+            agent_out = agent.act(s_t)
+            a_t, lp_t = agent_out.actions, agent_out.logprobs
             s_tp1, r_t, done, info = envs.step(a_t)
             # s_tp1 = np.reshape(s_tp1, agent.state_shape)
-            agent.remember(s_t, a_t, r_t, s_tp1, done)
+            agent.remember(state=s_t,
+                           action=a_t,
+                           reward=r_t,
+                           next_state=s_tp1,
+                           done=done,
+                           logprob=lp_t)
             s_t = s_tp1
 
             for single_step in info:

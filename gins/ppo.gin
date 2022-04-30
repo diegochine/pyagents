@@ -1,0 +1,21 @@
+get_agent.act_start_learning_rate = 3e-4
+get_agent.crit_start_learning_rate = 1e-3
+get_agent.schedule = True
+
+train_agent.training_steps = 1000
+train_agent.rollout_steps = 128
+train_agent.save_every = 100
+train_agent.update_rounds = 10
+train_agent.batch_size = 128
+
+PolicyNetwork.fc_params = (64, 64)
+PolicyNetwork.dropout_params = 0.05
+
+ValueNetwork.fc_params = (128, 128)
+ValueNetwork.dropout_params = 0.05
+
+PPO.gamma = 0.99
+PPO.critic_value_coef = 0.5
+PPO.entropy_coef = 1e-2
+PPO.gradient_clip_norm = 0.5
+PPO.clip_eps = 0.1

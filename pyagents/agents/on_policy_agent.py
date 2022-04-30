@@ -1,7 +1,4 @@
-import abc
 from abc import ABC
-from typing import Optional
-from collections import namedtuple
 
 import gym
 import numpy as np
@@ -9,12 +6,10 @@ import tensorflow as tf
 
 from pyagents.agents import Agent
 
-Trajectory = namedtuple('Trajectory', ['states', 'actions', 'rewards', 'next_states', 'dones'])
-
 
 class OnPolicyAgent(Agent, ABC):
 
-    MEMORY_KEYS = {'states', 'actions', 'rewards', 'next_states', 'dones'}
+    MEMORY_KEYS = {'states', 'actions', 'rewards', 'next_states', 'dones', 'logprobs'}
 
     def __init__(self,
                  state_shape: tuple,
@@ -54,27 +49,38 @@ class OnPolicyAgent(Agent, ABC):
         self._memory['next_states'] = np.zeros((rollout_steps, envs.num_envs) + self.state_shape)
         self._memory['rewards'] = np.zeros((rollout_steps, envs.num_envs))
         self._memory['dones'] = np.zeros((rollout_steps, envs.num_envs))
+        self._memory['logprobs'] = np.zeros((rollout_steps, envs.num_envs))
         self._memory_size = rollout_steps * envs.num_envs
 
     def clear_memory(self):
         self._memory = {k: np.zeros_like(self._memory[k]) for k in self.MEMORY_KEYS}
         self._step = 0
 
-    def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool) -> None:
+    def remember(self,
+                 state: np.ndarray,
+                 action: np.array,
+                 reward: float,
+                 next_state: np.ndarray,
+                 done: bool,
+                 logprob: float = 0.0,
+                 *args, **kwargs) -> None:
         """
         Saves piece of memory
-        :param state: state at current timestep
-        :param action: action at current timestep
-        :param reward: reward at current timestep
-        :param next_state: state at next timestep
-        :param done: whether the episode has ended
-        :return:
+
+        Args:
+            state: state at current timestep
+            action: action at current timestep
+            reward: reward at current timestep
+            next_state: state at next timestep
+            done: whether the episode has ended
+            logprob:
         """
         self._memory['states'][self._step] = state
         self._memory['actions'][self._step] = action
         self._memory['rewards'][self._step] = reward
         self._memory['next_states'][self._step] = next_state
         self._memory['dones'][self._step] = done
+        self._memory['logprobs'][self._step] = logprob
         self._step += 1
 
     def compute_returns(self):
@@ -98,13 +104,14 @@ class OnPolicyAgent(Agent, ABC):
         """
         rewards = np.reshape(self._memory['rewards'], -1)
         dones = 1 - np.reshape(self._memory['dones'], -1)
-        advantages = np.zeros(len(rewards) + 1)
-        for t in reversed(range(len(rewards))):
+        advantages = np.zeros(len(rewards))
+        advantages[-1] = rewards[-1] + (self.gamma * dones[-1] + next_state_values[-1]) - state_values[-1]
+        for t in reversed(range(len(rewards) - 1)):
             v_t = state_values[t]
             v_tp1 = next_state_values[t]
             delta = rewards[t] + (self.gamma * dones[t] + v_tp1) - v_t
             advantages[t] = delta + (self.gamma * self._lam_gae * advantages[t + 1] * dones[t])
-        advantages = tf.convert_to_tensor(advantages[:-1], dtype=tf.float32)
+        advantages = tf.convert_to_tensor(advantages, dtype=tf.float32)
         return tf.reshape(advantages, (-1, 1))
 
 
