@@ -60,6 +60,8 @@ class Agent(tf.Module, abc.ABC):
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
                         'name': name}
+        self._normalizers = dict()
+        self.init_normalizer('obs', shape=self._state_shape)
         self._train_step = 0
 
     @property
@@ -94,6 +96,69 @@ class Agent(tf.Module, abc.ABC):
         """
         self._training = not self._training if training is None else training
 
+    @property
+    def normalizers(self):
+        """Returns names of normalizers currently tracked by  this agent."""
+        return tuple(self._normalizers.keys())
+
+    def init_normalizer(self, name: str, shape: tuple):
+        """Setup a normalizer for indipendent tracking of running mean and variance.
+
+        By default, this is used to normalize observations; some algorithms may additionally want to normalize
+            some other quantity (e.g. returns or advantages).
+        Args:
+            name: name of the normalizer
+            shape: shape of mean and variance arrays
+        """
+        # gym assigns eps to count rather than 0, numerical stability
+        self._normalizers[name] = {'mean': np.zeros(shape, dtype=np.float32), 'var': np.ones(shape, dtype=np.float32), 'count': 1e-4}
+
+    def set_normalizer(self, name: str, mean: np.ndarray, var: np.ndarray, count: int):
+        self._normalizers[name] = {'mean': mean, 'var': var, 'count': count}
+
+    def get_normalizer(self, name: str, ret_std=True):
+        if name in self._normalizers:
+            mean = self._normalizers[name]['mean']
+            var = self._normalizers[name]['var']
+            if ret_std:
+                return mean, np.sqrt(var)
+            else:
+                return mean, var
+        else:
+            return None
+
+    def update_normalizer(self, name: str, x: np.ndarray):
+        """Updates a normalizer using Chan's parallel algorithm.
+
+        Args:
+            name: name of the normalizer
+            x: array used to update mean and variance of normalizer
+        Returns:
+            np.array, normalized input according
+        """
+        cur_mean = self._normalizers[name]['mean']
+        cur_var = self._normalizers[name]['var']
+        cur_count = self._normalizers[name]['count']
+        x_mean = np.mean(x, axis=0)
+        x_var = np.var(x, axis=0)
+        x_count = x.shape[0]
+
+        new_count = cur_count + x_count
+        delta = x_mean - cur_mean
+        new_mean = cur_mean + delta * x_count / new_count
+        m2_a, m2_b = cur_var * cur_count, x_var * x_count
+        m2 = m2_a + m2_b + (delta ** 2) * cur_count * x_count / new_count
+        new_var = m2 / new_count
+
+        self._normalizers[name]['mean'] = new_mean
+        self._normalizers[name]['var'] = new_var
+        self._normalizers[name]['count'] = new_count
+
+        return self.normalize(name, x)
+
+    def normalize(self, name: str, x: np.ndarray):
+        return (x - self._normalizers[name]['mean']) / np.maximum(np.sqrt(self._normalizers[name]['var']), 1e-6)
+
     def _init_logger(self, wandb_params: dict, config: dict) -> None:
         """Initializes WandB logger.
 
@@ -124,6 +189,7 @@ class Agent(tf.Module, abc.ABC):
             state: Current state.
             mask: (Optional) Boolean mask for illegal actions. Defaults to None
         """
+        state = self.normalize('obs', state)
         return self._policy.act(state, mask=mask, training=self._training)
 
     def _loss(self, *args, **kwargs):
@@ -170,8 +236,6 @@ class Agent(tf.Module, abc.ABC):
             dict of losses
         """
         losses_dict = self._train(batch_size, update_rounds, *args, **kwargs)
-        if self._wandb_run is not None:
-            self._log(**losses_dict)
         return losses_dict
 
     @abc.abstractmethod
@@ -221,6 +285,13 @@ class Agent(tf.Module, abc.ABC):
             for k, v in self._config.items():
                 if v is not None:
                     agent_group.attrs[k] = v
+
+            norm_group = f.create_group('normalizers')
+            for k, v in self._normalizers.items():
+                k_group = norm_group.create_group(k)
+                k_group.create_dataset('mean', data=v['mean'])
+                k_group.create_dataset('var', data=v['var'])
+                k_group.attrs['count'] = v['count']
 
             for net_name, net_config, net_weights in self._networks_config_and_weights():
                 net_config_group = f.create_group(f'{net_name}_config')
@@ -289,9 +360,18 @@ class Agent(tf.Module, abc.ABC):
             net(tf.ones((1, *net_config['state_shape'])))
             net.set_weights(net_weights)
             networks[net_name] = net
+
+        # get normalizers before closing file, and convert them to numpy (the strange slicing)
+        normalizers = {name: (f['normalizers'][name]['mean'][()],
+                              f['normalizers'][name]['var'][()],
+                              f['normalizers'][name].attrs['count'])
+                       for name in f['normalizers']}
         f.close()
 
         input_dict = cls.generate_input_config(agent_config, networks, load_mem, path)
 
         input_dict.update(kwargs)
-        return cls(**input_dict)
+        agent = cls(**input_dict)
+        for name, (mean, var, count) in normalizers.items():
+            agent.set_normalizer(name, mean, var, count)
+        return agent

@@ -16,23 +16,17 @@ class SoftmaxPolicy(Policy):
         self._policy_network = policy_network
 
     def _act(self, obs, deterministic=False, mask=None, training=True) -> PolicyOutput:
-        pi_out = self._policy_network(obs)
-        probs = pi_out.dist_params
-        probs = probs.numpy()
-        dist = tfp.distributions.Categorical(probs=probs)
-        if deterministic:
-            act = np.argmax(probs, axis=0)
-        else:
-            act = dist.sample().numpy()
-        lp = dist.log_prob(act).numpy()
+        pi_out = self._policy_network(obs, training=training)
+        act = pi_out.action.numpy()
+        lp = pi_out.logprobs.numpy()
         return PolicyOutput(actions=act, logprobs=lp)
 
     def entropy(self, output):
-        dist = tfp.distributions.Categorical(probs=output)
+        dist = tfp.distributions.Categorical(logits=output)
         return dist.entropy()
 
     def log_prob(self, output, actions):
-        dist = tfp.distributions.Categorical(probs=output)
+        dist = tfp.distributions.Categorical(logits=output)
         return dist.log_prob(tf.squeeze(actions))
 
     def _distribution(self, obs):

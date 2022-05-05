@@ -126,15 +126,15 @@ class VPG(OnPolicyAgent):
         # convert inputs to tf tensors and compute delta
         states = tf.convert_to_tensor(self._memory['states'], dtype=tf.float32)
         actions = tf.convert_to_tensor(self._memory['actions'], dtype=tf.float32)
-        states = tf.reshape(states, (self._memory_size, -1))
-        actions = tf.reshape(actions, (self._memory_size, -1))
+        states = tf.reshape(states, (self._rollout_size, -1))
+        actions = tf.reshape(actions, (self._rollout_size, -1))
 
         returns = self.compute_returns()
         state_values = self._baseline(states).critic_values
 
         if self._lam_gae > 0:
             next_states = tf.convert_to_tensor(self._memory['next_states'], dtype=tf.float32)
-            next_states = tf.reshape(next_states, (self._memory_size, -1))
+            next_states = tf.reshape(next_states, (self._rollout_size, -1))
             next_state_values = self._baseline(next_states).critic_values
             delta = self.compute_gae(state_values=state_values, next_state_values=next_state_values)
         else:
@@ -144,8 +144,8 @@ class VPG(OnPolicyAgent):
             returns = ((returns - tf.math.reduce_mean(returns)) / (tf.math.reduce_std(returns) + self.eps))
             delta = ((delta - tf.math.reduce_mean(delta)) / (tf.math.reduce_std(delta) + self.eps))
 
-        delta = tf.reshape(delta, (self._memory_size, 1))
-        returns = tf.reshape(returns, (self._memory_size, 1))
+        delta = tf.reshape(delta, (self._rollout_size, 1))
+        returns = tf.reshape(returns, (self._rollout_size, 1))
 
         indexes = np.arange(states.shape[0])
         for _ in range(update_rounds):

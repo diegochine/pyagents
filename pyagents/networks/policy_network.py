@@ -71,12 +71,15 @@ class PolicyNetwork(Network):
                 dropout_params=dropout_params,
                 activation=activation,
             )
+        assert isinstance(bounds, tuple) or bounds is None, f'wrong bounds param: {bounds}'
+        if bounds is not None and isinstance(bounds[0], np.ndarray):
+            bounds = (tf.convert_to_tensor(bounds[0].squeeze()), tf.convert_to_tensor(bounds[1].squeeze()))
         self._bounds = bounds
         self._output_type = output
         features_shape = (fc_params[-1],) if fc_params is not None else state_shape  # input shape for out
         if output == 'continuous':
             self._out_layer = tf.keras.layers.Dense(action_shape[0], **out_params,
-                                                    kernel_initializer=tf.random_uniform_initializer(minval=-0.003, maxval=0.003))
+                                                    kernel_initializer=tf.keras.initializers.Orthogonal(0.01))
         elif output == 'gaussian':
             self._out_layer = GaussianLayer(features_shape, action_shape, **out_params)
         elif output == 'beta':
@@ -126,14 +129,16 @@ class PolicyNetwork(Network):
             state = inputs
         output = self._out_layer(state, training=training)
         if self._output_type in ('gaussian', 'beta', 'softmax'):
-            action, dist_params = output
-        else:
+            action, dist_params, logprobs = output
+        else:  # deterministic policy network
             action = output
             dist_params = None
+            logprobs = None
         if self._act_layer is not None:
             action = self._act_layer(action)
         if self._bounds is not None:
             lb, ub = self._bounds
             action = tf.clip_by_value(action, lb, ub)
         return NetworkOutput(action=action,
-                             dist_params=dist_params)
+                             dist_params=dist_params,
+                             logprobs=logprobs)

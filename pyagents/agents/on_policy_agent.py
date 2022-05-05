@@ -26,7 +26,7 @@ class OnPolicyAgent(Agent, ABC):
                                             save_memories=save_memories,
                                             name=name)
         self._memory = {k: None for k in self.MEMORY_KEYS}  # keeps track of current trajectories
-        self._memory_size = None  # size of above container, #steps * #envs
+        self._rollout_size = None  # size of above container, #steps * #envs
         self._step = 0  # step for indexing above memory
         self._lam_gae = lam_gae
 
@@ -50,7 +50,7 @@ class OnPolicyAgent(Agent, ABC):
         self._memory['rewards'] = np.zeros((rollout_steps, envs.num_envs))
         self._memory['dones'] = np.zeros((rollout_steps, envs.num_envs))
         self._memory['logprobs'] = np.zeros((rollout_steps, envs.num_envs))
-        self._memory_size = rollout_steps * envs.num_envs
+        self._rollout_size = rollout_steps * envs.num_envs
 
     def clear_memory(self):
         self._memory = {k: np.zeros_like(self._memory[k]) for k in self.MEMORY_KEYS}
@@ -102,7 +102,11 @@ class OnPolicyAgent(Agent, ABC):
             state_values: critic predictions of state values for each element in the trajectory.
             next_state_values: critic predictions of next state values for each element in the trajectory.
         """
+        state_values = state_values.numpy()
+        next_state_values = next_state_values.numpy()
         rewards = np.reshape(self._memory['rewards'], -1)
+        if 'rewards' in self.normalizers:
+            rewards = self.normalize('rewards', rewards)
         dones = 1 - np.reshape(self._memory['dones'], -1)
         advantages = np.zeros(len(rewards))
         advantages[-1] = rewards[-1] + (self.gamma * dones[-1] + next_state_values[-1]) - state_values[-1]
@@ -112,6 +116,4 @@ class OnPolicyAgent(Agent, ABC):
             delta = rewards[t] + (self.gamma * dones[t] + v_tp1) - v_t
             advantages[t] = delta + (self.gamma * self._lam_gae * advantages[t + 1] * dones[t])
         advantages = tf.convert_to_tensor(advantages, dtype=tf.float32)
-        return tf.reshape(advantages, (-1, 1))
-
-
+        return tf.stop_gradient(tf.reshape(advantages, (-1, 1)))

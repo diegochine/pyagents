@@ -56,10 +56,7 @@ def train_off_policy_agent(agent, env, batch_size=64, steps_to_train=1, update_r
 def train_agent(agent, envs, training_steps=10 ** 5, batch_size=64, steps_to_train=1, update_rounds=1, rollout_steps=100,
                 episode_max_steps=500, init_params=None, output_dir="./output/", save_every=1000):
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    else:
-        rmtree(output_dir)
+    if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
 
     if init_params is not None:
@@ -76,20 +73,20 @@ def train_agent(agent, envs, training_steps=10 ** 5, batch_size=64, steps_to_tra
     env_step = 0
     k = 0
 
-    with tqdm(total=training_steps, desc='TRAINING') as pbar:
+    with tqdm(total=training_steps) as pbar:
+        pbar.set_description('INITIALIZING')
         if agent.on_policy:
             train_step_fn = train_on_policy_agent(batch_size=batch_size,
                                                   rollout_steps=rollout_steps,
                                                   update_rounds=update_rounds)
-            print('Initializing agent')
             agent.init(envs, rollout_steps, **init_params)
         else:
             raise NotImplementedError()
             train_step_fn = train_off_policy_agent()
-            print('Initializing agent')
             agent.init(envs, **init_params)
 
         state = envs.reset()
+        pbar.set_description('TRAINING')
         while training_step <= training_steps:
             state, info = train_step_fn(agent, envs, s_t=state)
             training_step += update_rounds
@@ -98,6 +95,9 @@ def train_agent(agent, envs, training_steps=10 ** 5, batch_size=64, steps_to_tra
                 k += 1
             pbar.update(update_rounds)
             pbar.set_postfix(**info)
+
+            if agent.is_logging:
+                wandb.log(info)
 
             # while not done and episode_step < episode_max_steps:
             #     a_t = agent.act(s_t.reshape(1, -1))
@@ -128,6 +128,7 @@ def train_agent(agent, envs, training_steps=10 ** 5, batch_size=64, steps_to_tra
             # if agent.is_logging:
             #     wandb.log({'score': scores[-1], 'episode': episode})
 
+    agent.save(ver='final')
     return agent, scores
 
 
@@ -142,7 +143,7 @@ def test_agent(agent, env, n_episodes=10, episode_max_steps=500, render=True):
         while not done and step < episode_max_steps:
             if render:
                 env.render()
-            a_t = agent.act(s_t.reshape(1, -1))
+            a_t = agent.act(s_t.reshape(1, -1)).actions
             if isinstance(a_t, (np.ndarray, tf.Tensor)):
                 a_t = a_t[0]  # FIXME doesn't work for complex action spaces, must be more general
             s_tp1, r_t, done, info = env.step(a_t)

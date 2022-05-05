@@ -1,3 +1,4 @@
+import argparse
 import os
 import random
 
@@ -25,21 +26,21 @@ def load_agent(algo, dir, ver):
         agent = A2C.load(dir, ver=ver, training=False)
     elif algo == 'ddpg':
         agent = DDPG.load(dir, ver=ver, training=False)
+    elif algo == 'ppo':
+        agent = PPO.load(dir, ver=ver, training=False)
     else:
         raise ValueError(f'unsupported algorithm {algo}')
     return agent
 
 
 @gin.configurable
-def get_agent(algo, env, output_dir, act_start_learning_rate=1e-3, buffer='uniform', scaling=None,
-              crit_start_learning_rate=None, schedule=False, wandb_params=None):
+def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='uniform', scaling=None,
+              crit_start_learning_rate=None, schedule=True, wandb_params=None, gym_id=None, training_steps=10**5):
     if crit_start_learning_rate is None:
         crit_start_learning_rate = act_start_learning_rate
     if schedule:
-        act_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(act_start_learning_rate, 10 ** 5,
-                                                                          act_start_learning_rate / 100)
-        crit_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(crit_start_learning_rate, 10 ** 5,
-                                                                           crit_start_learning_rate / 100)
+        act_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(act_start_learning_rate, training_steps, 0)
+        crit_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(crit_start_learning_rate, training_steps, 0)
     else:
         act_learning_rate = act_start_learning_rate
         crit_learning_rate = crit_start_learning_rate
@@ -49,6 +50,8 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=1e-3, buffer='unifo
     else:
         state_shape = env.observation_space.shape
         action_space = env.action_space
+    if wandb_params is not None:
+        wandb_params['group'] = gym_id
     if algo == 'dqn':
         assert isinstance(action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
         action_shape = action_space.n
@@ -91,7 +94,7 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=1e-3, buffer='unifo
         v_opt = get_optimizer(learning_rate=crit_learning_rate)
         agent = PPO(state_shape, action_shape,
                     actor=a_net, critic=v_net, actor_opt=a_opt, critic_opt=v_opt,
-                    name='vpg', wandb_params=wandb_params, save_dir=output_dir,
+                    name='ppo', wandb_params=wandb_params, save_dir=output_dir,
                     log_dict={'actor_learning_rate': act_start_learning_rate,
                               'critic_learning_rate': crit_start_learning_rate})
     elif algo == 'a2c':
@@ -137,11 +140,14 @@ def reset_random_seed(seed):
 
 
 def make_env(gym_id, seed, idx, capture_video, output_dir):
+    reset_random_seed(seed)
     def thunk():
         env = gym.make(gym_id)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         if capture_video:
             if idx == 0:
+                if not os.path.isdir(f"{output_dir}/videos"):
+                    os.mkdir(f"{output_dir}/videos")
                 env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos")
         env.seed(seed)
         env.action_space.seed(seed)
@@ -154,11 +160,13 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Script for training a sample agent on Gym")
     parser.add_argument('-a', '--agent', type=str, help='which agent to use, either DQN, VPG, A2C or DDPG')
     parser.add_argument('-c', '--config', type=str, default='', help='path to gin config file')
-    parser.add_argument('-tv', '--test-ver', type=int, default=-1,
-                        help='if -1, trains; if >=0, performs evaluation using this version')
+    parser.add_argument('-tv', '--test-ver', type=int, default=None,
+                        help='if -1, use final version; if >=0, performs evaluation using this version')
     parser.add_argument('-e', '--env', type=str, default='cartpole',
                         help='env to use, choices: cartpole, pendulum, bipedalwalker')
     parser.add_argument('-n', '--num-envs', type=int, default=1,
+                        help='number of parallel envs for vectorized environment')
+    parser.add_argument('--video', action=argparse.BooleanOptionalAction, default=False,
                         help='number of parallel envs for vectorized environment')
     args = parser.parse_args()
     args.env = args.env.lower()
@@ -170,18 +178,17 @@ if __name__ == "__main__":
         gym_id = 'BipedalWalker-v3'
     else:
         raise ValueError(f'unsupported env {args.env}')
-    output_dir = f'output/{args.agent}-{gym_id}'
+    output_dir = f'../output/{args.agent}-{gym_id}'
     seed = 42
-    # env = gym.wrappers.NormalizeObservation(env)
     if args.config:
         gin.parse_config_file(args.config)
-    is_testing = (args.test_ver >= 0)
+    is_testing = args.test_ver is not None
     if is_testing:
         agent = load_agent(args.agent, output_dir, args.test_ver)
         env = make_env(gym_id, seed, 0, True, output_dir)()
         scores = test_agent(agent, env)
     else:
-        envs = gym.vector.SyncVectorEnv([make_env(gym_id, seed, i, False, output_dir) for i in range(args.num_envs)])
-        agent = get_agent(args.agent, envs, output_dir)
+        envs = gym.vector.SyncVectorEnv([make_env(gym_id, seed, i, args.video, output_dir) for i in range(args.num_envs)])
+        agent = get_agent(args.agent, envs, output_dir=output_dir, gym_id=gym_id)
         agent, scores = train_agent(agent, envs, output_dir=output_dir)
-        agent.save(f'output/{args.agent}-{args.env}', ver='final')
+        agent.save(ver=-1)
