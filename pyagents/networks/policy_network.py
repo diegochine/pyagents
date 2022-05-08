@@ -42,8 +42,6 @@ class PolicyNetwork(Network):
             activation: (Optional) Name of activation function of encoder network. Defaults to 'relu'.
             out_params: (Optional) Additional parameters for output layer. Defaults to None.
             bounds: (Optional) Bounds of action space. Default to None (unbounded space).
-            action_processing_layer: (Optional) Optional tf.keras.Layer to process action, e.g. performing rescaling.
-              Defaults to None.
             name:  Name of the network. Defaults to 'ActorNetwork'.
             trainable: if True, network is trainable. Defaults to True.
             dtype: Network dtype. Defaults to tf.float32.
@@ -136,7 +134,7 @@ class PolicyNetwork(Network):
             logprobs = None
         if self._act_layer is not None:
             action = self._act_layer(action)
-        if self._bounds is not None:
+        if self._bounds is not None:  # FIXME secondo me da spostare su agent
             lb, ub = self._bounds
             action = tf.clip_by_value(action, lb, ub)
         return NetworkOutput(action=action,

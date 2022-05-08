@@ -179,18 +179,24 @@ class VPG(OnPolicyAgent):
                 del tape
                 self._train_step += 1
 
-        self.clear_memory()
+                # logging
+                if self.is_logging:
+                    if self._log_gradients:
+                        actor_grads_log = {f'actor/{".".join(var.name.split("/")[1:])}': grad.numpy()
+                                           for grad, var in actor_grads_and_vars}
+                        critic_grads_log = {f'critic/{".".join(var.name.split("/")[1:])}': grad.numpy()
+                                            for grad, var in critic_grads_and_vars}
+                        if self._gradient_clip_norm is not None:
+                            actor_grads_log['actor/norm'] = actor_norm
+                            critic_grads_log['critic/norm'] = critic_norm
+                        self._log(do_log_step=False, prefix='gradients', **actor_grads_log, **critic_grads_log)
+                    losses_log = {'policy_loss': float(policy_loss),
+                                  'critic_loss': float(critic_loss),
+                                  'entropy_loss': float(entropy_loss),
+                                  'train_step': self._train_step}
+                    self._log(do_log_step=True, **losses_log)
 
-        # logging
-        if self.is_logging:
-            actor_grads_log = {f'actor/{".".join(var.name.split("/")[1:])}': grad.numpy()
-                               for grad, var in actor_grads_and_vars}
-            critic_grads_log = {f'critic/{".".join(var.name.split("/")[1:])}': grad.numpy()
-                                for grad, var in critic_grads_and_vars}
-            if self._gradient_clip_norm is not None:
-                actor_grads_log['actor/norm'] = actor_norm
-                critic_grads_log['critic/norm'] = critic_norm
-            self._log(do_log_step=False, prefix='gradients', **actor_grads_log, **critic_grads_log)
+        self.clear_memory()
 
         return {'policy_loss': float(policy_loss),
                 'critic_loss': float(critic_loss),

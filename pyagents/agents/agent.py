@@ -37,6 +37,7 @@ class Agent(tf.Module, abc.ABC):
                  training: bool,
                  save_dir: str = './output',
                  save_memories: bool = False,
+                 log_gradients: bool = False,
                  name='Agent'):
         """Creates an Agent.
 
@@ -63,6 +64,7 @@ class Agent(tf.Module, abc.ABC):
         self._normalizers = dict()
         self.init_normalizer('obs', shape=self._state_shape)
         self._train_step = 0
+        self._log_gradients = log_gradients
 
     @property
     def state_shape(self) -> tuple:

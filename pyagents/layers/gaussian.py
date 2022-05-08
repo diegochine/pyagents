@@ -16,11 +16,13 @@ class GaussianLayer(tf.keras.layers.Layer):
 
     def call(self, x, training=True):
         mean = self._actor_mean(x)
-        std_dev = self._actor_std_dev(x - 0.1) + 0.01
+        std_dev = self._actor_std_dev(x - 0.5) + 0.01
         if self._action_shape == (1,):  # orribile
             mean = tf.squeeze(mean)
             std_dev = tf.squeeze(std_dev)
-        gaussian = tfp.distributions.Normal(loc=mean, scale=std_dev)
+            gaussian = tfp.distributions.Normal(loc=mean, scale=std_dev)
+        else:
+            gaussian = tfp.distributions.MultivariateNormalDiag(mean, std_dev)
         if not training or self._deterministic:
             action = mean
         else:

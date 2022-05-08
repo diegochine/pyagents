@@ -24,15 +24,21 @@ class GaussianPolicy(Policy):
     def _act(self, obs, deterministic=False, mask=None, training=True):
         pi_out = self._policy_network(obs)
         action = pi_out.action.numpy()
-        lp = pi_out.logprobs
+        lp = pi_out.logprobs.numpy()
         return PolicyOutput(actions=action, logprobs=lp)
 
     def entropy(self, output):
-        gaussian = tfp.distributions.Normal(loc=output[0], scale=output[1])
+        if self._action_shape == (1,):  # orribile
+            gaussian = tfp.distributions.Normal(loc=output[0], scale=output[1])
+        else:
+            gaussian = tfp.distributions.MultivariateNormalDiag(output[0], output[1])
         return gaussian.entropy()
 
     def log_prob(self, output, actions):
-        gaussian = tfp.distributions.Normal(loc=output[0], scale=output[1])
+        if self._action_shape == (1,):  # orribile
+            gaussian = tfp.distributions.Normal(loc=output[0], scale=output[1])
+        else:
+            gaussian = tfp.distributions.MultivariateNormalDiag(output[0], output[1])
         return gaussian.log_prob(actions)
 
     def _distribution(self, obs):

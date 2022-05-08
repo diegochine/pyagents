@@ -1,6 +1,8 @@
 get_agent.act_start_learning_rate = 3e-4
 get_agent.crit_start_learning_rate = 1e-3
 get_agent.schedule = True
+get_agent.training_steps = 1024000
+# get_agent.scaling = 2.0  # pendulum
 
 train_agent.training_steps = 1000
 train_agent.rollout_steps = 128
@@ -14,8 +16,9 @@ PolicyNetwork.dropout_params = 0.05
 ValueNetwork.fc_params = (64, 64)
 ValueNetwork.dropout_params = 0.05
 
-
 VPG.gamma = 0.99
 VPG.critic_value_coef = 0.5
 VPG.entropy_coef = 0
 VPG.gradient_clip_norm = 0.25
+
+get_agent.wandb_params = {'key': 'KEY', 'project': 'test', 'entity': 'mazelions', 'tags': ['vpg']}

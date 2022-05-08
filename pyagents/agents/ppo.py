@@ -32,7 +32,7 @@ class PPO(OnPolicyAgent):
                  training: bool = True,
                  save_dir: str = './output',
                  log_dict: dict = None,
-                 name: str = 'VPG',
+                 name: str = 'PPO',
                  wandb_params: Optional[dict] = None):
         """Creates a VPG agent.
 
@@ -82,6 +82,9 @@ class PPO(OnPolicyAgent):
         self._clip_eps = clip_eps
         self._target_kl = target_kl
 
+        self._train_step_pi = 0
+        self._train_step_v = 0
+
         self.init_normalizer('rewards', shape=(1,))
 
         self.config.update({
@@ -103,13 +106,29 @@ class PPO(OnPolicyAgent):
         self._pi(tf.ones((1, *state_shape))), self._vf(tf.ones((1, *state_shape)))  # TODO remove
 
     def _wandb_define_metrics(self):
-        wandb.define_metric('policy_loss', step_metric='train_step', summary="min")
-        wandb.define_metric('critic_loss', step_metric='train_step', summary="min")
-        wandb.define_metric('entropy_loss', step_metric='train_step', summary="min")
-        wandb.define_metric('clipfrac', step_metric='train_step', summary="max")
-        wandb.define_metric('approx_kl', step_metric='train_step', summary="max")
+        wandb.define_metric('policy_loss', step_metric='train_step_pi', summary="min")
+        wandb.define_metric('critic_loss', step_metric='train_step_v', summary="min")
+        wandb.define_metric('entropy_loss', step_metric='train_step_pi', summary="min")
+        wandb.define_metric('clipfrac', step_metric='train_step_pi', summary="max")
+        wandb.define_metric('approx_kl', step_metric='train_step_pi', summary="max")
 
-    def _loss(self, states, actions, returns, adv, logprobs):
+    def _loss(self, states, actions, adv, logprobs, returns):
+        policy_loss, entropy_loss, info = self._loss_pi(states=states,
+                                                        actions=actions,
+                                                        adv=tf.stop_gradient(adv),
+                                                        logprobs=logprobs)
+        critic_loss = self._loss_v(states=states,
+                                   returns=tf.stop_gradient(returns))
+        loss = policy_loss + critic_loss - entropy_loss
+        approx_kl, clipfrac = info
+        return {'loss': loss,
+                'policy_loss': policy_loss,
+                'entropy_loss': entropy_loss,
+                'critic_loss': critic_loss,
+                'approx_kl': approx_kl,
+                'clipfrac': clipfrac}
+
+    def _loss_pi(self, states, actions, adv, logprobs):
         pi_out = self._pi(inputs=states)
         dist_params = pi_out.dist_params
         new_logprobs = tf.reshape(self.get_policy().log_prob(dist_params, actions), (-1, 1))
@@ -118,17 +137,22 @@ class PPO(OnPolicyAgent):
         pi_clipped = tf.clip_by_value(pi_ratio, 1 - self._clip_eps, 1 + self._clip_eps)
         policy_loss = -tf.reduce_mean(tf.minimum(pi_ratio * adv, pi_clipped * adv))
 
-        critic_values = self._vf(states).critic_values
-        critic_loss = self._critic_value_coef * tf.reduce_mean((critic_values - returns) ** 2)
-
         entropy_loss = self._entropy_coef * tf.reduce_mean(self.get_policy().entropy(dist_params))
 
         # kl divergence for early stopping condition http://joschu.net/blog/kl-approx.html and clipfrac debug variable
-        approx_kl = tf.stop_gradient(tf.reduce_mean((pi_ratio - 1) - pi_logratio))
-        clipfrac = tf.stop_gradient(1 - (tf.math.count_nonzero(tf.abs((pi_ratio - 1)) < self._clip_eps) / pi_ratio.shape[0]))
-        return policy_loss, critic_loss, entropy_loss, (approx_kl, clipfrac)
+        approx_kl = tf.reduce_mean((pi_ratio - 1) - pi_logratio)
+        clipfrac = 1 - (tf.math.count_nonzero(tf.abs((pi_ratio - 1)) < self._clip_eps) / pi_ratio.shape[0])
+
+        return policy_loss, entropy_loss, (tf.stop_gradient(approx_kl), tf.stop_gradient(clipfrac))
+
+    def _loss_v(self, states, returns):
+        critic_values = self._vf(states).critic_values
+        critic_loss = self._critic_value_coef * tf.reduce_mean((critic_values - returns) ** 2)
+        return critic_loss
 
     def _train(self, batch_size, update_rounds, *args, **kwargs):
+        # trackers for losses
+        pi_losses, v_losses, e_losses = [], [], []
         # update normalizers, reshape to remove batch dimension(s)
         states = self.update_normalizer('obs', np.reshape(self._memory['states'], (self._rollout_size, -1)))
         self.update_normalizer('rewards', np.reshape(self._memory['rewards'], -1))
@@ -171,28 +195,33 @@ class PPO(OnPolicyAgent):
 
                 # training: forward and loss computation
                 with tf.GradientTape(persistent=True) as tape:
-                    policy_loss, critic_loss, entropy_loss, info = self._loss(states=mb_states,
-                                                                              actions=mb_actions,
-                                                                              returns=tf.stop_gradient(mb_returns),
-                                                                              adv=tf.stop_gradient(mb_adv),
-                                                                              logprobs=mb_logprobs)
-                    loss = policy_loss + critic_loss - entropy_loss
+                    loss_info = self._loss(states=mb_states,
+                                           actions=mb_actions,
+                                           returns=tf.stop_gradient(mb_returns),
+                                           adv=tf.stop_gradient(mb_adv),
+                                           logprobs=mb_logprobs)
+                loss = loss_info['loss']
                 assert not tf.math.is_inf(loss) and not tf.math.is_nan(loss)
-                approx_kl, clipfrac = info
 
                 # training: backward pass
-                if approx_kl <= self._target_kl:  # can still update policy
+                if loss_info['approx_kl'] <= self._target_kl:  # can still update policy network
                     actor_grads = tape.gradient(loss, self._pi.trainable_variables)
                     if self._gradient_clip_norm is not None:
                         actor_grads, actor_norm = tf.clip_by_global_norm(actor_grads, self._gradient_clip_norm)
                     actor_grads_and_vars = list(zip(actor_grads, self._pi.trainable_variables))
                     self._actor_opt.apply_gradients(actor_grads_and_vars)
-                    actor_grads_log = {f'actor/{".".join(var.name.split("/")[1:])}': grad.numpy()
-                                       for grad, var in actor_grads_and_vars}
-                    if self._gradient_clip_norm is not None:
-                        actor_grads_log['actor/norm'] = actor_norm
-                else:
-                    actor_grads_log = {}
+                    self._train_step_pi += 1
+                    if self.is_logging:
+                        if self._log_gradients:
+                            actor_grads_log = {f'actor/{".".join(var.name.split("/")[1:])}': grad.numpy()
+                                               for grad, var in actor_grads_and_vars}
+                            if self._gradient_clip_norm is not None:
+                                actor_grads_log['actor/norm'] = actor_norm
+                            self._log(do_log_step=False, prefix='gradients', **actor_grads_log)
+                        self._log(do_log_step=False, prefix='debug',
+                                  approx_kl=loss_info['approx_kl'], clipfrac=loss_info['clipfrac'])
+                        self._log(do_log_step=True, policy_loss=loss_info['policy_loss'],
+                                  entropy_loss=loss_info['entropy_loss'], train_step_pi=self._train_step_pi)
 
                 critic_grads = tape.gradient(loss, self._vf.trainable_variables)
                 if self._gradient_clip_norm is not None:
@@ -200,28 +229,27 @@ class PPO(OnPolicyAgent):
                 critic_grads_and_vars = list(zip(critic_grads, self._vf.trainable_variables))
                 self._critic_opt.apply_gradients(critic_grads_and_vars)
                 del tape
-                self._train_step += 1
+                self._train_step_v += 1
 
                 # logging
                 if self.is_logging:
-                    critic_grads_log = {f'critic/{".".join(var.name.split("/")[1:])}': grad.numpy()
-                                        for grad, var in critic_grads_and_vars}
-                    if self._gradient_clip_norm is not None:
-                        critic_grads_log['critic/norm'] = critic_norm
-                    self._log(do_log_step=False, prefix='gradients', **actor_grads_log, **critic_grads_log)
-                    debug_log = {'approx_kl': approx_kl, 'clipfrac': clipfrac}
-                    self._log(do_log_step=False, prefix='debug', **debug_log)
-                    losses_log = {'policy_loss': float(policy_loss),
-                                  'critic_loss': float(critic_loss),
-                                  'entropy_loss': float(entropy_loss),
-                                  'train_step': self._train_step}
-                    self._log(do_log_step=True, **losses_log)
+                    if self._log_gradients:
+                        critic_grads_log = {f'critic/{".".join(var.name.split("/")[1:])}': grad.numpy()
+                                            for grad, var in critic_grads_and_vars}
+                        if self._gradient_clip_norm is not None:
+                            critic_grads_log['critic/norm'] = critic_norm
+                        self._log(do_log_step=False, prefix='gradients', **critic_grads_log)
+                    self._log(do_log_step=True, critic_loss=loss_info['critic_loss'], train_step_v=self._train_step_v)
+
+                pi_losses.append(float(loss_info['policy_loss']))
+                v_losses.append(float(loss_info['critic_loss']))
+                e_losses.append(float(loss_info['entropy_loss']))
 
         self.clear_memory()
 
-        return {'policy_loss': float(policy_loss),
-                'critic_loss': float(critic_loss),
-                'entropy_loss': float(entropy_loss)}
+        return {'policy_loss': np.mean(pi_losses),
+                'critic_loss': np.mean(v_losses),
+                'entropy_loss': np.mean(e_losses)}
 
     def _networks_config_and_weights(self):
         a = [('actor_net', self._pi.get_config(), self._pi.get_weights())]

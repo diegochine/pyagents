@@ -17,17 +17,17 @@ import gin
 from pyagents.utils.training_utils import test_agent, get_optimizer
 
 
-def load_agent(algo, dir, ver):
+def load_agent(algo, path, ver):
     if algo == 'dqn':
-        agent = DQNAgent.load(dir, ver=ver, epsilon=0.00, training=False)
+        agent = DQNAgent.load(path, ver=ver, epsilon=0.00, training=False)
     elif algo == 'vpg':
-        agent = VPG.load(dir, ver=ver, training=False)
+        agent = VPG.load(path, ver=ver, training=False)
     elif algo == 'a2c':
-        agent = A2C.load(dir, ver=ver, training=False)
+        agent = A2C.load(path, ver=ver, training=False)
     elif algo == 'ddpg':
-        agent = DDPG.load(dir, ver=ver, training=False)
+        agent = DDPG.load(path, ver=ver, training=False)
     elif algo == 'ppo':
-        agent = PPO.load(dir, ver=ver, training=False)
+        agent = PPO.load(path, ver=ver, training=False)
     else:
         raise ValueError(f'unsupported algorithm {algo}')
     return agent
@@ -35,7 +35,7 @@ def load_agent(algo, dir, ver):
 
 @gin.configurable
 def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='uniform', scaling=None,
-              crit_start_learning_rate=None, schedule=True, wandb_params=None, gym_id=None, training_steps=10**5):
+              crit_start_learning_rate=None, schedule=True, wandb_params=None, gym_id=None, training_steps=10 ** 5):
     if crit_start_learning_rate is None:
         crit_start_learning_rate = act_start_learning_rate
     if schedule:
@@ -141,7 +141,10 @@ def reset_random_seed(seed):
 
 def make_env(gym_id, seed, idx, capture_video, output_dir):
     reset_random_seed(seed)
+
     def thunk():
+        if not os.path.isdir(output_dir):
+            os.mkdir(output_dir)
         env = gym.make(gym_id)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         if capture_video:
@@ -153,6 +156,7 @@ def make_env(gym_id, seed, idx, capture_video, output_dir):
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
         return env
+
     return thunk
 
 
@@ -176,9 +180,11 @@ if __name__ == "__main__":
         gym_id = 'Pendulum-v1'
     elif args.env.startswith('b'):
         gym_id = 'BipedalWalker-v3'
+    elif args.env.startswith('a'):
+        gym_id = 'Acrobot-v1'
     else:
         raise ValueError(f'unsupported env {args.env}')
-    output_dir = f'../output/{args.agent}-{gym_id}'
+    output_dir = f'output/{args.agent}-{gym_id}'
     seed = 42
     if args.config:
         gin.parse_config_file(args.config)
@@ -188,7 +194,8 @@ if __name__ == "__main__":
         env = make_env(gym_id, seed, 0, True, output_dir)()
         scores = test_agent(agent, env)
     else:
-        envs = gym.vector.SyncVectorEnv([make_env(gym_id, seed, i, args.video, output_dir) for i in range(args.num_envs)])
+        envs = gym.vector.SyncVectorEnv(
+            [make_env(gym_id, seed, i, args.video, output_dir) for i in range(args.num_envs)])
         agent = get_agent(args.agent, envs, output_dir=output_dir, gym_id=gym_id)
         agent, scores = train_agent(agent, envs, output_dir=output_dir)
         agent.save(ver=-1)
