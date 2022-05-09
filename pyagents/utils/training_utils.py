@@ -44,18 +44,19 @@ def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
         else:
             train_info = loss_dict
         return s_t, train_info
+
     return train_step
 
 
 def train_off_policy_agent(agent, env, batch_size=64, steps_to_train=1, update_rounds=1,
-                          rollout_steps=100):
+                           rollout_steps=100):
     pass
 
 
 @gin.configurable
-def train_agent(agent, envs, training_steps=10 ** 5, batch_size=64, steps_to_train=1, update_rounds=1, rollout_steps=100,
+def train_agent(agent, envs, training_steps=10 ** 5, batch_size=64, steps_to_train=1, update_rounds=1,
+                rollout_steps=100,
                 episode_max_steps=500, init_params=None, output_dir="./output/", save_every=1000):
-
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
 
@@ -63,9 +64,6 @@ def train_agent(agent, envs, training_steps=10 ** 5, batch_size=64, steps_to_tra
         assert isinstance(init_params, dict), f'init_params should be dict of optional parameters for init function'
     else:
         init_params = {}
-
-    if agent.is_logging:
-        wandb.define_metric('score', step_metric="episode", summary="max")
 
     scores = []
     losses = []
@@ -79,7 +77,9 @@ def train_agent(agent, envs, training_steps=10 ** 5, batch_size=64, steps_to_tra
             train_step_fn = train_on_policy_agent(batch_size=batch_size,
                                                   rollout_steps=rollout_steps,
                                                   update_rounds=update_rounds)
-            agent.init(envs, rollout_steps, **init_params)
+            env_config = dict(batch_size=batch_size, rollout_steps=rollout_steps,
+                              update_rounds=update_rounds, training_steps=training_steps)
+            agent.init(envs, rollout_steps, env_config=env_config, **init_params)
         else:
             raise NotImplementedError()
             train_step_fn = train_off_policy_agent()

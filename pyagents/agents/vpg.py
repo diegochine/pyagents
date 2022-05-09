@@ -31,7 +31,6 @@ class VPG(OnPolicyAgent):
                  entropy_coef: types.Float = 0,
                  gradient_clip_norm: Optional[float] = None,
                  training: bool = True,
-                 rew_gamma: float = 0.0,
                  save_dir: str = './output',
                  log_dict: dict = None,
                  name: str = 'VPG',
@@ -62,7 +61,7 @@ class VPG(OnPolicyAgent):
                     name: (Optional) Name of the agent.
                     wandb_params: (Optional) Dict of parameters to enable WandB logging. Defaults to None.
                 """
-        super(VPG, self).__init__(state_shape, action_shape, rew_gamma=rew_gamma, lam_gae=lam_gae,
+        super(VPG, self).__init__(state_shape, action_shape, lam_gae=lam_gae,
                                   training=training, save_dir=save_dir, name=name)
         if actor_opt is None and training:
             raise ValueError('agent cannot be trained without optimizer')

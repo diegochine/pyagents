@@ -11,7 +11,7 @@ from pyagents.utils import types
 
 @gin.configurable
 class PPO(OnPolicyAgent):
-    """An agent implementing the REINFORCE algorithm, also known as Vanilla Policy Gradient."""
+    """An agent implementing the PPO algorithm"""
 
     def __init__(self,
                  state_shape: tuple,
@@ -26,16 +26,16 @@ class PPO(OnPolicyAgent):
                  standardize: bool = True,
                  lam_gae: float = 0.9,
                  target_kl: float = 0.01,
+                 returns_normalization: bool = True,
                  critic_value_coef: types.Float = 0.5,
                  entropy_coef: types.Float = 0,
                  gradient_clip_norm: Optional[float] = 0.5,
                  training: bool = True,
-                 rew_gamma: float = 0.0,
                  save_dir: str = './output',
                  log_dict: dict = None,
                  name: str = 'PPO',
                  wandb_params: Optional[dict] = None):
-        """Creates a VPG agent.
+        """Creates an PPO agent.
 
                 Args:
                     state_shape: Tuple representing the shape of the input space (observations).
@@ -48,9 +48,12 @@ class PPO(OnPolicyAgent):
                     critic_value_coef: (Optional) Coefficient applied on the value function during loss computation.
                     policy: (Optional) The policy the agent should follow. Defaults to policy network's policy.
                     gamma: (Optional) Discount factor. Defaults to 0.5.
-                    standardize: (Optional) If True, standardizes delta before computing gradient update.
-                      Defaults to False.
+                    standardize: (Optional) If True, standardizes advantages at the minibatch level.
+                      Defaults to True.
                     lam_gae: (Optional) Lambda for Generalized Advantage Estimation. Defaults to 0.9.
+                    target_kl: (Optional) Target KL divergence for early stopping condition (policy network)
+                      Defaults to 0.01.
+                    returns_normalization: (Optional) If True, enables return normalization. Defaults to True.
                     entropy_coef: (Optional) Coefficient applied to entropy loss. Defaults to 1e-3.
                     gradient_clip_norm: (Optional) Global norm for gradient clipping, pass None to disable.
                       Defaults to 0.5.
@@ -60,7 +63,7 @@ class PPO(OnPolicyAgent):
                     name: (Optional) Name of the agent.
                     wandb_params: (Optional) Dict of parameters to enable WandB logging. Defaults to None.
                 """
-        super(PPO, self).__init__(state_shape, action_shape, rew_gamma=rew_gamma, lam_gae=lam_gae,
+        super(PPO, self).__init__(state_shape, action_shape, lam_gae=lam_gae,
                                   training=training, save_dir=save_dir, name=name)
         if actor_opt is None and training:
             raise ValueError('agent cannot be trained without optimizer')
@@ -82,6 +85,8 @@ class PPO(OnPolicyAgent):
         self._gradient_clip_norm = gradient_clip_norm
         self._clip_eps = clip_eps
         self._target_kl = target_kl
+        if returns_normalization:
+            self.init_normalizer('returns', (1,))
 
         self._train_step_pi = 0
         self._train_step_v = 0
@@ -154,7 +159,6 @@ class PPO(OnPolicyAgent):
         pi_losses, v_losses, e_losses = [], [], []
         # update normalizers, reshape to remove batch dimension(s)
         states = self.normalize('obs', np.reshape(self._memory['states'], (self._rollout_size, -1)))
-        # self.update_normalizer('rewards', np.reshape(self._memory['rewards'], -1))
         # convert inputs to tf tensors
         states = tf.convert_to_tensor(states, dtype=tf.float32)
         actions = tf.convert_to_tensor(self._memory['actions'], dtype=tf.float32)
@@ -168,15 +172,22 @@ class PPO(OnPolicyAgent):
         for _ in range(update_rounds):
             # compute gae and td(lambda) returns, once per data pass
             state_values = self._vf(states).critic_values
-
-            next_states = tf.convert_to_tensor(self._memory['next_states'], dtype=tf.float32)
+            next_states = self.normalize('obs', np.reshape(self._memory['next_states'], (self._rollout_size, -1)))
+            next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
             next_states = tf.reshape(next_states, (self._rollout_size, -1))
             next_state_values = self._vf(next_states).critic_values
-            adv = self.compute_gae(state_values=state_values, next_state_values=next_state_values)
-            returns = tf.stop_gradient(adv + state_values)
 
-            adv = tf.reshape(adv, (self._rollout_size, 1))
-            returns = tf.reshape(returns, (self._rollout_size, 1))
+            if 'returns' in self.normalizers:  # unnormalize value function predictions
+                _, ret_std = self.get_normalizer('returns')
+                state_values = state_values * ret_std
+                next_state_values = next_state_values * ret_std
+
+            unnormalized_returns, advantages = self.compute_gae(state_values=state_values, next_state_values=next_state_values)
+
+            if 'returns' in self.normalizers:  # normalize returns and update statistics
+                self.update_normalizer('returns', unnormalized_returns)
+                _, ret_std = self.get_normalizer('returns')
+                returns = unnormalized_returns / ret_std
 
             np.random.shuffle(indexes)
             # training: iterate minibatches
@@ -185,7 +196,7 @@ class PPO(OnPolicyAgent):
                 batch_indexes = indexes[start:end]
                 mb_states = tf.gather(states, batch_indexes, axis=0)
                 mb_actions = tf.gather(actions, batch_indexes, axis=0)
-                mb_adv = tf.gather(adv, batch_indexes, axis=0)
+                mb_adv = tf.gather(advantages, batch_indexes, axis=0)
                 mb_returns = tf.gather(returns, batch_indexes, axis=0)
                 mb_logprobs = tf.gather(logprobs, batch_indexes, axis=0)
 
@@ -238,8 +249,8 @@ class PPO(OnPolicyAgent):
                         if self._gradient_clip_norm is not None:
                             critic_grads_log['critic/norm'] = critic_norm
                         self._log(do_log_step=False, prefix='gradients', **critic_grads_log)
-                    avg_state_value = np.mean(state_values.numpy())
-                    avg_td_return = np.mean(returns.numpy())
+                    avg_state_value = np.mean(tf.gather(state_values, batch_indexes, axis=0).numpy())
+                    avg_td_return = np.mean(tf.gather(unnormalized_returns, batch_indexes, axis=0).numpy())
                     self._log(do_log_step=False, prefix='debug', avg_state_value=avg_state_value, avg_td_return=avg_td_return)
                     self._log(do_log_step=True, critic_loss=loss_info['critic_loss'], train_step_v=self._train_step_v)
 
