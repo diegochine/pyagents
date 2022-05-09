@@ -30,6 +30,7 @@ class PPO(OnPolicyAgent):
                  entropy_coef: types.Float = 0,
                  gradient_clip_norm: Optional[float] = 0.5,
                  training: bool = True,
+                 rew_gamma: float = 0.0,
                  save_dir: str = './output',
                  log_dict: dict = None,
                  name: str = 'PPO',
@@ -59,7 +60,7 @@ class PPO(OnPolicyAgent):
                     name: (Optional) Name of the agent.
                     wandb_params: (Optional) Dict of parameters to enable WandB logging. Defaults to None.
                 """
-        super(PPO, self).__init__(state_shape, action_shape, lam_gae=lam_gae,
+        super(PPO, self).__init__(state_shape, action_shape, rew_gamma=rew_gamma, lam_gae=lam_gae,
                                   training=training, save_dir=save_dir, name=name)
         if actor_opt is None and training:
             raise ValueError('agent cannot be trained without optimizer')
@@ -84,8 +85,6 @@ class PPO(OnPolicyAgent):
 
         self._train_step_pi = 0
         self._train_step_v = 0
-
-        self.init_normalizer('rewards', shape=(1,))
 
         self.config.update({
             'gamma': self.gamma,
@@ -154,8 +153,8 @@ class PPO(OnPolicyAgent):
         # trackers for losses
         pi_losses, v_losses, e_losses = [], [], []
         # update normalizers, reshape to remove batch dimension(s)
-        states = self.update_normalizer('obs', np.reshape(self._memory['states'], (self._rollout_size, -1)))
-        self.update_normalizer('rewards', np.reshape(self._memory['rewards'], -1))
+        states = self.normalize('obs', np.reshape(self._memory['states'], (self._rollout_size, -1)))
+        # self.update_normalizer('rewards', np.reshape(self._memory['rewards'], -1))
         # convert inputs to tf tensors
         states = tf.convert_to_tensor(states, dtype=tf.float32)
         actions = tf.convert_to_tensor(self._memory['actions'], dtype=tf.float32)
@@ -239,6 +238,9 @@ class PPO(OnPolicyAgent):
                         if self._gradient_clip_norm is not None:
                             critic_grads_log['critic/norm'] = critic_norm
                         self._log(do_log_step=False, prefix='gradients', **critic_grads_log)
+                    avg_state_value = np.mean(state_values.numpy())
+                    avg_td_return = np.mean(returns.numpy())
+                    self._log(do_log_step=False, prefix='debug', avg_state_value=avg_state_value, avg_td_return=avg_td_return)
                     self._log(do_log_step=True, critic_loss=loss_info['critic_loss'], train_step_v=self._train_step_v)
 
                 pi_losses.append(float(loss_info['policy_loss']))

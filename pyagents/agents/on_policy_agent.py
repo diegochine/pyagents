@@ -15,6 +15,7 @@ class OnPolicyAgent(Agent, ABC):
                  state_shape: tuple,
                  action_shape: tuple,
                  training: bool,
+                 rew_gamma: float = 0.0,
                  lam_gae: float = 0.9,
                  save_dir: str = './output',
                  save_memories: bool = False,
@@ -22,6 +23,7 @@ class OnPolicyAgent(Agent, ABC):
         super(OnPolicyAgent, self).__init__(state_shape,
                                             action_shape,
                                             training,
+                                            rew_gamma=rew_gamma,
                                             save_dir=save_dir,
                                             save_memories=save_memories,
                                             name=name)
@@ -30,13 +32,13 @@ class OnPolicyAgent(Agent, ABC):
         self._step = 0  # step for indexing above memory
         self._lam_gae = lam_gae
 
-
     @property
     def on_policy(self):
         return True
 
     def init(self, envs, rollout_steps, *args, **kwargs):
         """Initializes memory (i.e. trajectories storage)."""
+        super().init(envs, *args, **kwargs)
         assert isinstance(envs, gym.vector.VectorEnv), 'envs must be instance of VectorEnv even for a single instance'
         if isinstance(envs.single_action_space, gym.spaces.Discrete):
             self._memory['actions'] = np.zeros((rollout_steps, envs.num_envs))
@@ -75,8 +77,12 @@ class OnPolicyAgent(Agent, ABC):
             done: whether the episode has ended
             logprob:
         """
+        super().remember(state, action, reward, next_state, done, *args, **kwargs)
         self._memory['states'][self._step] = state
         self._memory['actions'][self._step] = action
+        if 'rewards' in self.normalizers:
+            _, std_dev = self.get_normalizer('rewards')
+            reward = reward / std_dev
         self._memory['rewards'][self._step] = reward
         self._memory['next_states'][self._step] = next_state
         self._memory['dones'][self._step] = done
@@ -105,8 +111,6 @@ class OnPolicyAgent(Agent, ABC):
         state_values = state_values.numpy()
         next_state_values = next_state_values.numpy()
         rewards = np.reshape(self._memory['rewards'], -1)
-        if 'rewards' in self.normalizers:
-            rewards = self.normalize('rewards', rewards)
         dones = 1 - np.reshape(self._memory['dones'], -1)
         advantages = np.zeros(len(rewards))
         advantages[-1] = rewards[-1] + (self.gamma * dones[-1] + next_state_values[-1]) - state_values[-1]

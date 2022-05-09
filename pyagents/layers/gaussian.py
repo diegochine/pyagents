@@ -3,20 +3,29 @@ import tensorflow_probability as tfp
 
 
 class GaussianLayer(tf.keras.layers.Layer):
-    def __init__(self, state_shape, action_shape, deterministic=False, name='Gaussian', dtype=tf.float32, **kwargs):
+    def __init__(self, state_shape, action_shape, bounds, deterministic=False, start_std=0.5, std_eps=0.01,
+                 name='Gaussian', dtype=tf.float32, **kwargs):
         super(GaussianLayer, self).__init__(name=name, dtype=dtype, **kwargs)
         self._state_shape = state_shape
         self._action_shape = action_shape
         self._deterministic = deterministic
-        self._actor_mean = tf.keras.layers.Dense(action_shape[0],  # assumes 1d action space
-                                                 kernel_initializer=tf.keras.initializers.Orthogonal(0.01))
-        self._actor_std_dev = tf.keras.layers.Dense(action_shape[0],
-                                                    # kernel_initializer=tf.keras.initializers.Orthogonal(0.01),
-                                                    activation=tf.math.softplus)
+        # determine parameters for rescaling
+        lb, ub = bounds
+        self._act_means = tf.constant((ub + lb) / 2.0, dtype=dtype)
+        self._act_magnitudes = tf.constant((ub - lb) / 2.0, dtype=dtype)
+        self._mean_layer = tf.keras.layers.Dense(action_shape[0],  # assumes 1d action space
+                                                 kernel_initializer=tf.keras.initializers.Orthogonal(0.01),
+                                                 activation='tanh')
+        # initialize std dev variable(s)
+        std_init = tfp.math.softplus_inverse(start_std - std_eps)
+        self._std_dev = tf.Variable(initial_value=tf.fill(action_shape, std_init),
+                                    shape=self._action_shape,
+                                    trainable=True)
+        self._std_eps = std_eps
 
     def call(self, x, training=True):
-        mean = self._actor_mean(x)
-        std_dev = self._actor_std_dev(x - 0.5) + 0.01
+        mean = self._act_means + self._act_magnitudes * self._mean_layer(x)
+        std_dev = tf.math.softplus(self._std_dev) + self._std_eps
         if self._action_shape == (1,):  # orribile
             mean = tf.squeeze(mean)
             std_dev = tf.squeeze(std_dev)

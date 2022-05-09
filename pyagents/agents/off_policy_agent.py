@@ -37,12 +37,13 @@ class OffPolicyAgent(Agent, ABC):
     def memory_len(self):
         return len(self._memory)
 
-    def init(self, env, max_steps=2000, min_memories=None, actions=None):
+    def init(self, envs, max_steps=2000, min_memories=None, actions=None):
+        super(OffPolicyAgent, self).init(envs)
         print('Collecting initial memories')
         if min_memories is None:
             min_memories = self._memory.get_config()['size_long']
         while self.memory_len < min_memories:
-            s = env.reset()
+            s = envs.reset()
             done = False
             step = 0
             self._memory.commit_ltmemory()
@@ -50,8 +51,8 @@ class OffPolicyAgent(Agent, ABC):
                 if actions is not None:
                     a = np.random.choice(actions, 1)
                 else:
-                    a = env.action_space.sample()
-                new_state, r, done, _ = env.step(a)
+                    a = envs.action_space.sample()
+                new_state, r, done, _ = envs.step(a)
                 self.remember(s, a, r, new_state, done)
                 s = new_state
                 step += 1

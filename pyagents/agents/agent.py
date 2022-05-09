@@ -35,6 +35,7 @@ class Agent(tf.Module, abc.ABC):
                  state_shape: tuple,
                  action_shape: tuple,
                  training: bool,
+                 rew_gamma: float = 0.0,
                  save_dir: str = './output',
                  save_memories: bool = False,
                  log_gradients: bool = False,
@@ -44,6 +45,8 @@ class Agent(tf.Module, abc.ABC):
         Args:
             state_shape: Tuple representing the shape of the input space (observations).
             action_shape: Tuple representing the shape of the action space.
+            rew_gamma; (Optional) if bigger than 0.0 rewards are normalized s.t. exponential moving average with
+              discount rew_gamma is fixed. Defaults to 0.0.
             training: (Optional) If True, agent is in training phase. Defaults to True.
             name: (Optional) Name of the agent.
         """
@@ -63,7 +66,12 @@ class Agent(tf.Module, abc.ABC):
                         'name': name}
         self._normalizers = dict()
         self.init_normalizer('obs', shape=self._state_shape)
+        if rew_gamma > 0:
+            self.init_normalizer('rewards', shape=(1,))
+        self._rew_ema = np.zeros(1,)
+        self._rew_gamma = rew_gamma
         self._train_step = 0
+        self.num_envs = 0
         self._log_gradients = log_gradients
 
     @property
@@ -123,7 +131,7 @@ class Agent(tf.Module, abc.ABC):
             mean = self._normalizers[name]['mean']
             var = self._normalizers[name]['var']
             if ret_std:
-                return mean, np.sqrt(var)
+                return mean, np.maximum(np.sqrt(var), 1e-6)
             else:
                 return mean, var
         else:
@@ -180,9 +188,10 @@ class Agent(tf.Module, abc.ABC):
         self._log_dict = {}
         self.is_logging = True
 
-    def init(self, *args, **kwargs):
+    def init(self, envs, *args, **kwargs):
         """Performs additional initialization, such as collecting memories for off-policy agents"""
-        pass
+        self.num_envs = getattr(envs, "num_envs", 1)
+        self._rew_ema = np.zeros(self.num_envs)
 
     def act(self, state: np.ndarray, mask: Optional[np.ndarray] = None):
         """Returns the best action in the state according to current policy.
@@ -191,7 +200,7 @@ class Agent(tf.Module, abc.ABC):
             state: Current state.
             mask: (Optional) Boolean mask for illegal actions. Defaults to None
         """
-        state = self.normalize('obs', state)
+        state = self.update_normalizer('obs', state)
         return self._policy.act(state, mask=mask, training=self._training)
 
     def _loss(self, *args, **kwargs):
@@ -240,7 +249,6 @@ class Agent(tf.Module, abc.ABC):
         losses_dict = self._train(batch_size, update_rounds, *args, **kwargs)
         return losses_dict
 
-    @abc.abstractmethod
     def remember(self,
                  state: np.ndarray,
                  action: np.ndarray,
@@ -250,7 +258,7 @@ class Agent(tf.Module, abc.ABC):
                  *args, **kwargs) -> None:
         """Stores piece of experience in internal memory/buffer.
 
-        Subclasses are expected to implement this method.
+        Subclasses are expected to implement this method, and call it if reward normalization is needed.
         Args:
             done:
             state: current state s_t
@@ -258,7 +266,9 @@ class Agent(tf.Module, abc.ABC):
             reward: reward r_(t+1) obtained by the agent following the execution of a_t in s_t
             next_state: state s_(t+1)
         """
-        pass
+        if self._rew_gamma > 0:
+            self._rew_ema = self._rew_ema * self._rew_gamma + reward
+            self.update_normalizer('rewards', self._rew_ema)
 
     def _wandb_define_metrics(self):
         """Defines WandB metrics.

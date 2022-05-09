@@ -79,18 +79,13 @@ class PolicyNetwork(Network):
             self._out_layer = tf.keras.layers.Dense(action_shape[0], **out_params,
                                                     kernel_initializer=tf.keras.initializers.Orthogonal(0.01))
         elif output == 'gaussian':
-            self._out_layer = GaussianLayer(features_shape, action_shape, **out_params)
+            self._out_layer = GaussianLayer(features_shape, action_shape, bounds=bounds, **out_params)
         elif output == 'beta':
-            self._out_layer = DirichletLayer(features_shape, action_shape, **out_params)
+            self._out_layer = DirichletLayer(features_shape, action_shape, bounds=bounds, **out_params)
         elif output == 'softmax':
             self._out_layer = SoftmaxLayer(features_shape, action_shape, **out_params)
         else:
             raise ValueError(f'unknown output type {output}')
-
-        if scaling is not None:
-            self._act_layer = RescalingLayer(scaling_factor=scaling)
-        else:
-            self._act_layer = None
 
     def get_policy(self, caller=None):
         """Returns a Policy object that represents the this network's current policy."""
@@ -132,11 +127,9 @@ class PolicyNetwork(Network):
             action = output
             dist_params = None
             logprobs = None
-        if self._act_layer is not None:
-            action = self._act_layer(action)
-        if self._bounds is not None:  # FIXME secondo me da spostare su agent
-            lb, ub = self._bounds
-            action = tf.clip_by_value(action, lb, ub)
+        # if self._bounds is not None:  # FIXME secondo me da spostare su agent
+        #     lb, ub = self._bounds
+        #     action = tf.clip_by_value(action, lb, ub)
         return NetworkOutput(action=action,
                              dist_params=dist_params,
                              logprobs=logprobs)
