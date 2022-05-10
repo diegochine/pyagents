@@ -11,8 +11,8 @@ class GaussianLayer(tf.keras.layers.Layer):
         self._deterministic = deterministic
         # determine parameters for rescaling
         lb, ub = bounds
-        self._act_means = tf.constant((ub + lb) / 2.0, dtype=dtype)
-        self._act_magnitudes = tf.constant((ub - lb) / 2.0, dtype=dtype)
+        self._act_means = tf.constant((ub + lb) / 2.0, shape=action_shape, dtype=dtype)
+        self._act_magnitudes = tf.constant((ub - lb) / 2.0, shape=action_shape, dtype=dtype)
         self._mean_layer = tf.keras.layers.Dense(action_shape[0],  # assumes 1d action space
                                                  kernel_initializer=tf.keras.initializers.Orthogonal(0.01),
                                                  activation='tanh')
@@ -26,18 +26,17 @@ class GaussianLayer(tf.keras.layers.Layer):
     def call(self, x, training=True):
         mean = self._act_means + self._act_magnitudes * self._mean_layer(x)
         std_dev = tf.math.softplus(self._std_dev) + self._std_eps
-        if self._action_shape == (1,):  # orribile
-            mean = tf.squeeze(mean)
-            std_dev = tf.squeeze(std_dev)
+        if self._action_shape == (1,):
+            mean = tf.squeeze(mean, axis=1)
             gaussian = tfp.distributions.Normal(loc=mean, scale=std_dev)
         else:
-            gaussian = tfp.distributions.MultivariateNormalDiag(mean, std_dev)
+            gaussian = tfp.distributions.MultivariateNormalDiag(loc=mean, scale=std_dev)
         if not training or self._deterministic:
             action = mean
         else:
             action = gaussian.sample()
         logprobs = gaussian.log_prob(action)
-        if self._action_shape == (1,):  # orribile 2
+        if self._action_shape == (1,):  # orribile
             action = action[..., tf.newaxis]
             mean = mean[..., tf.newaxis]
             std_dev = std_dev[..., tf.newaxis]

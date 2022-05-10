@@ -6,7 +6,7 @@ get_agent.training_steps = 1024000
 
 train_agent.training_steps = 1000
 train_agent.rollout_steps = 128
-train_agent.save_every = 100
+train_agent.test_every = 100
 train_agent.update_rounds = 2
 train_agent.batch_size = 128
 
@@ -21,4 +21,4 @@ VPG.critic_value_coef = 0.5
 VPG.entropy_coef = 0
 VPG.gradient_clip_norm = 0.25
 
-get_agent.wandb_params = {'key': 'KEY', 'project': 'test', 'entity': 'mazelions', 'tags': ['vpg']}
+#get_agent.wandb_params = {'key': 'KEY', 'project': 'test', 'entity': 'mazelions', 'tags': ['vpg']}

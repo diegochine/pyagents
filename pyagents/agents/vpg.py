@@ -124,19 +124,19 @@ class VPG(OnPolicyAgent):
 
     def _train(self, batch_size, update_rounds, *args, **kwargs):
         # convert inputs to tf tensors and compute delta
-        states = tf.convert_to_tensor(self._memory['states'], dtype=tf.float32)
-        actions = tf.convert_to_tensor(self._memory['actions'], dtype=tf.float32)
-        states = tf.reshape(states, (self._rollout_size, -1))
+        states = self.normalize('obs', np.reshape(self._memory['states'], (self._rollout_size, -1)))
+        states = tf.convert_to_tensor(states, dtype=self.dtype)
+        actions = tf.convert_to_tensor(self._memory['actions'], dtype=self.dtype)
         actions = tf.reshape(actions, (self._rollout_size, -1))
 
         returns = self.compute_returns()
         state_values = self._baseline(states).critic_values
 
         if self._lam_gae > 0:
-            next_states = tf.convert_to_tensor(self._memory['next_states'], dtype=tf.float32)
-            next_states = tf.reshape(next_states, (self._rollout_size, -1))
+            next_states = self.normalize('obs', np.reshape(self._memory['next_states'], (self._rollout_size, -1)))
+            next_states = tf.convert_to_tensor(next_states, dtype=self.dtype)
             next_state_values = self._baseline(next_states).critic_values
-            delta = self.compute_gae(state_values=state_values, next_state_values=next_state_values)
+            _, delta = self.compute_gae(state_values=state_values, next_state_values=next_state_values)
         else:
             delta = returns - tf.stop_gradient(state_values)
 
@@ -154,15 +154,17 @@ class VPG(OnPolicyAgent):
             for start in range(0, states.shape[0], batch_size):
                 end = start + batch_size
                 batch_indexes = indexes[start:end]
-                s_b = tf.gather(states, batch_indexes, axis=0)
-                a_b = tf.gather(actions, batch_indexes, axis=0)
-                d_b = tf.gather(delta, batch_indexes, axis=0)
-                r_b = tf.gather(returns, batch_indexes, axis=0)
+                mb_states = tf.gather(states, batch_indexes, axis=0)
+                mb_actions = tf.gather(actions, batch_indexes, axis=0)
+                mb_delta = tf.gather(delta, batch_indexes, axis=0)
+                mb_returns = tf.gather(returns, batch_indexes, axis=0)
 
                 # training: forward and loss computation
                 with tf.GradientTape(persistent=True) as tape:
-                    policy_loss, critic_loss, entropy_loss = self._loss((s_b, a_b,
-                                                                         tf.stop_gradient(r_b), tf.stop_gradient(d_b)))
+                    policy_loss, critic_loss, entropy_loss = self._loss((mb_states,
+                                                                         mb_actions,
+                                                                         tf.stop_gradient(mb_returns),
+                                                                         tf.stop_gradient(mb_delta)))
                     loss = policy_loss + critic_loss - entropy_loss
                 assert not tf.math.is_inf(loss) and not tf.math.is_nan(loss)
 

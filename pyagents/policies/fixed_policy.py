@@ -1,7 +1,7 @@
 import numpy as np
 import gin
 
-from pyagents.policies.policy import Policy
+from pyagents.policies.policy import Policy, PolicyOutput
 from pyagents.utils import types
 
 
@@ -25,4 +25,14 @@ class FixedPolicy(Policy):
         action = self._policy_network(obs, **kwargs).action
         if self.bounds is not None:
             action = np.clip(action, self.bounds[0], self.bounds[1])
-        return action
+        return PolicyOutput(actions=action)
+
+    def log_prob(self, output, action):
+        return self._policy.log_prob(output, action)
+
+    def entropy(self, output):
+        raise NotImplementedError('Entropy not available with eps-greedy')
+
+    @property
+    def is_discrete(self):
+        return True  # TODO should allow for continuous policies as well

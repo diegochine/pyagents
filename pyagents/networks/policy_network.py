@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 from pyagents.networks.network import Network, NetworkOutput
 from pyagents.networks.encoding_network import EncodingNetwork
-from pyagents.layers import GaussianLayer, DirichletLayer, SoftmaxLayer, RescalingLayer
+from pyagents.layers import GaussianLayer, DirichletLayer, SoftmaxLayer
 from pyagents.policies import GaussianPolicy, DirichletPolicy, SoftmaxPolicy, FixedPolicy
 
 
@@ -16,15 +16,14 @@ class PolicyNetwork(Network):
     def __init__(self,
                  state_shape: tuple,
                  action_shape: tuple,
-                 output: str = 'gaussian',
+                 output: str,
                  conv_params: Optional[Iterable] = None,
                  fc_params: Optional[Iterable[int]] = (64, 64),
                  dropout_params: Optional[Union[float, Iterable[float]]] = None,
                  activation: str = 'tanh',
                  out_params: Optional[dict] = None,
                  bounds: Optional[tuple] = None,
-                 scaling: Optional[float] = None,
-                 name: str = 'ActorNetwork',
+                 name: str = 'PolicyNetwork',
                  trainable: bool = True,
                  dtype=tf.float32):
         """Creates a Policy Network.
@@ -52,9 +51,9 @@ class PolicyNetwork(Network):
                         'conv_params': conv_params if conv_params else [],
                         'fc_params': fc_params if fc_params else [],
                         'dropout_params': dropout_params if dropout_params else [],
+                        'bounds': bounds if bounds else [],
                         'activation': activation,
                         'output': output,
-                        'scaling': scaling,
                         'out_params': out_params,
                         'name': name}
         if out_params is None:

@@ -115,6 +115,8 @@ class PPO(OnPolicyAgent):
         wandb.define_metric('entropy_loss', step_metric='train_step_pi', summary="min")
         wandb.define_metric('clipfrac', step_metric='train_step_pi', summary="max")
         wandb.define_metric('approx_kl', step_metric='train_step_pi', summary="max")
+        wandb.define_metric('state_values', step_metric='train_step_v', summary="max")
+        wandb.define_metric('td_targets', step_metric='train_step_v', summary="max")
 
     def _loss(self, states, actions, adv, logprobs, returns):
         policy_loss, entropy_loss, info = self._loss_pi(states=states,
@@ -249,9 +251,9 @@ class PPO(OnPolicyAgent):
                         if self._gradient_clip_norm is not None:
                             critic_grads_log['critic/norm'] = critic_norm
                         self._log(do_log_step=False, prefix='gradients', **critic_grads_log)
-                    avg_state_value = np.mean(tf.gather(state_values, batch_indexes, axis=0).numpy())
-                    avg_td_return = np.mean(tf.gather(unnormalized_returns, batch_indexes, axis=0).numpy())
-                    self._log(do_log_step=False, prefix='debug', avg_state_value=avg_state_value, avg_td_return=avg_td_return)
+                    self._log(do_log_step=False, prefix='debug',
+                              state_values=tf.gather(state_values, batch_indexes, axis=0).numpy(),
+                              td_targets=tf.gather(unnormalized_returns, batch_indexes, axis=0).numpy())
                     self._log(do_log_step=True, critic_loss=loss_info['critic_loss'], train_step_v=self._train_step_v)
 
                 pi_losses.append(float(loss_info['policy_loss']))

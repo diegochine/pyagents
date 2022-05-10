@@ -35,10 +35,12 @@ class Agent(tf.Module, abc.ABC):
                  state_shape: tuple,
                  action_shape: tuple,
                  training: bool,
+                 normalize_obs: bool = True,
                  save_dir: str = './output',
                  save_memories: bool = False,
                  log_gradients: bool = False,
-                 name='Agent'):
+                 name='Agent',
+                 dtype=tf.float32):
         """Creates an Agent.
 
         Args:
@@ -62,10 +64,12 @@ class Agent(tf.Module, abc.ABC):
                         'action_shape': action_shape,
                         'name': name}
         self._normalizers = dict()
-        self.init_normalizer('obs', shape=self._state_shape)
+        if normalize_obs:
+            self.init_normalizer('obs', shape=self._state_shape)
         self._train_step = 0
         self.num_envs = 0
         self._log_gradients = log_gradients
+        self.dtype = dtype
 
     @property
     def state_shape(self) -> tuple:
@@ -160,7 +164,11 @@ class Agent(tf.Module, abc.ABC):
         return self.normalize(name, x)
 
     def normalize(self, name: str, x: np.ndarray):
-        return (x - self._normalizers[name]['mean']) / np.maximum(np.sqrt(self._normalizers[name]['var']), 1e-6)
+        if name in self.normalizers:
+            m, s = self.get_normalizer(name)
+            return (x - m) / s
+        else:
+            return x
 
     def _init_logger(self, wandb_params: dict, config: dict) -> None:
         """Initializes WandB logger.
@@ -187,7 +195,7 @@ class Agent(tf.Module, abc.ABC):
         if self._wandb_run is not None and env_config is not None:
             self._wandb_run.config.update(env_config)
 
-    def act(self, state: np.ndarray, mask: Optional[np.ndarray] = None):
+    def act(self, state: np.ndarray, mask: Optional[np.ndarray] = None, training: bool = True):
         """Returns the best action in the state according to current policy.
 
         Args:
@@ -195,7 +203,7 @@ class Agent(tf.Module, abc.ABC):
             mask: (Optional) Boolean mask for illegal actions. Defaults to None
         """
         state = self.update_normalizer('obs', state)
-        return self._policy.act(state, mask=mask, training=self._training)
+        return self._policy.act(state, mask=mask, training=self._training and training)
 
     def _loss(self, *args, **kwargs):
         """Computes loss."""
@@ -230,7 +238,7 @@ class Agent(tf.Module, abc.ABC):
         """
         pass
 
-    def train(self, batch_size: int, update_rounds: int, *args, **kwargs):
+    def train(self, batch_size: int, update_rounds: int = 1, *args, **kwargs):
         """Performs training step, and eventually logs loss values.
 
         Subclasses must not override this method, but must implement _train().
@@ -344,11 +352,7 @@ class Agent(tf.Module, abc.ABC):
         for net_name, net_class in cls.networks_name():
             net_config = {}
             net_config_group = f[f'{net_name}_config']
-            for i in net_config_group.attrs.items():
-                # if hasattr(i, 'decode'):
-                #     i = i.decode('utf-8')
-                # i = json_utils.decode(i)
-                k, v = i
+            for k, v in net_config_group.attrs.items():
                 if isinstance(v, np.void):
                     net_config[k] = json_utils.decode(v.tobytes())
                 else:

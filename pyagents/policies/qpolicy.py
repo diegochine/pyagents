@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from pyagents.policies.policy import Policy
+from pyagents.policies.policy import Policy, PolicyOutput
 
 
 class QPolicy(Policy):
@@ -14,11 +14,11 @@ class QPolicy(Policy):
         return True
 
     def _act(self, obs, mask=None, training=True):
-        qvals = self._q_network(obs.reshape(1, *obs.shape))
+        qvals = self._q_network(obs)
         if mask is not None:
             assert isinstance(mask, np.ndarray)
             qvals = tf.where(mask, qvals, np.NINF)
-        return np.argmax(qvals, keepdims=True)[0]
+        return PolicyOutput(actions=tf.argmax(qvals, axis=1).numpy())
 
     def _distribution(self, obs):
         qvals = self._q_network(obs.reshape(1, *obs.shape))

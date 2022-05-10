@@ -39,8 +39,12 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
     if crit_start_learning_rate is None:
         crit_start_learning_rate = act_start_learning_rate
     if schedule:
-        act_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(act_start_learning_rate, training_steps, 0)
-        crit_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(crit_start_learning_rate, training_steps, 0)
+        act_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(act_start_learning_rate,
+                                                                          training_steps,
+                                                                          act_start_learning_rate / 1000)
+        crit_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(crit_start_learning_rate,
+                                                                           training_steps,
+                                                                           crit_start_learning_rate / 1000)
     else:
         act_learning_rate = act_start_learning_rate
         crit_learning_rate = crit_start_learning_rate
@@ -70,7 +74,7 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
             action_shape = action_space.shape
             output = 'gaussian'
             bounds = (action_space.low, action_space.high)
-        a_net = PolicyNetwork(state_shape, action_shape, output=output, bounds=bounds, scaling=scaling)
+        a_net = PolicyNetwork(state_shape, action_shape, output=output, bounds=bounds)
         v_net = ValueNetwork(state_shape)
         a_opt = get_optimizer(learning_rate=act_learning_rate)
         v_opt = get_optimizer(learning_rate=crit_learning_rate)
@@ -88,7 +92,7 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
             action_shape = action_space.shape
             output = 'gaussian'
             bounds = (action_space.low, action_space.high)
-        a_net = PolicyNetwork(state_shape, action_shape, output=output, bounds=bounds, scaling=scaling)
+        a_net = PolicyNetwork(state_shape, action_shape, output=output, bounds=bounds)
         v_net = ValueNetwork(state_shape)
         a_opt = get_optimizer(learning_rate=act_learning_rate)
         v_opt = get_optimizer(learning_rate=crit_learning_rate)
@@ -116,7 +120,7 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
         action_shape = action_space.shape
         bounds = (action_space.low, action_space.high)
         buffer = PrioritizedBuffer() if buffer == 'prioritized' else UniformBuffer()
-        pi_params = {'bounds': bounds, 'scaling': scaling,
+        pi_params = {'bounds': bounds,
                      'out_params': {'activation': 'tanh'}}
         q_params = {}
         ac = ACNetwork(state_shape=state_shape, action_shape=action_shape,
@@ -151,7 +155,7 @@ def make_env(gym_id, seed, idx, capture_video, output_dir):
             if idx == 0:
                 if not os.path.isdir(f"{output_dir}/videos"):
                     os.mkdir(f"{output_dir}/videos")
-                env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos")
+                env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos", episode_trigger=lambda s: (s % 500) == 0)
         env.seed(seed)
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
@@ -170,6 +174,8 @@ if __name__ == "__main__":
                         help='env to use, choices: cartpole, pendulum, bipedalwalker')
     parser.add_argument('-n', '--num-envs', type=int, default=1,
                         help='number of parallel envs for vectorized environment')
+    parser.add_argument('-o', '--output-dir', type=str, default='',
+                        help='directory where to store trained agent(s)')
     parser.add_argument('--video', action=argparse.BooleanOptionalAction, default=False,
                         help='number of parallel envs for vectorized environment')
     args = parser.parse_args()
@@ -182,20 +188,25 @@ if __name__ == "__main__":
         gym_id = 'BipedalWalker-v3'
     elif args.env.startswith('a'):
         gym_id = 'Acrobot-v1'
+    elif args.env.startswith('l'):
+        gym_id = 'LunarLander-v2'
     else:
         raise ValueError(f'unsupported env {args.env}')
-    output_dir = f'output/{args.agent}-{gym_id}'
+    if not args.output_dir:
+        args.output_dir = f'output/{args.agent}-{gym_id}'
     seed = 42
+    reset_random_seed(seed)
     if args.config:
         gin.parse_config_file(args.config)
-    is_testing = args.test_ver is not None
-    if is_testing:
-        agent = load_agent(args.agent, output_dir, args.test_ver)
-        env = make_env(gym_id, seed, 0, True, output_dir)()
+    if args.test_ver is not None:
+        agent = load_agent(args.agent, args.output_dir, args.test_ver)
+        env = make_env(gym_id, seed, 0, True, args.output_dir)()
         scores = test_agent(agent, env)
     else:
-        envs = gym.vector.SyncVectorEnv(
-            [make_env(gym_id, seed, i, args.video, output_dir) for i in range(args.num_envs)])
-        agent = get_agent(args.agent, envs, output_dir=output_dir, gym_id=gym_id)
-        agent, scores = train_agent(agent, envs, output_dir=output_dir)
+        train_envs = gym.vector.SyncVectorEnv(
+            [make_env(gym_id, (seed * (i + 1)) ** 2, i, False, args.output_dir)
+             for i in range(args.num_envs)])
+        test_env = gym.vector.SyncVectorEnv([make_env(gym_id, seed, 0, args.video, args.output_dir)])
+        agent = get_agent(args.agent, train_envs, output_dir=args.output_dir, gym_id=gym_id)
+        agent, scores = train_agent(agent, train_envs, test_env, output_dir=args.output_dir)
         agent.save(ver=-1)

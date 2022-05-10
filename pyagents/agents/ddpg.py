@@ -35,7 +35,8 @@ class DDPG(OffPolicyAgent):
                  save_dir: str = './output',
                  save_memories: bool = False,
                  name: str = 'DDPG',
-                 wandb_params: Optional[dict] = None):
+                 wandb_params: Optional[dict] = None,
+                 dtype=tf.float32):
         """Creates a DDPG agent.
 
         Args:
@@ -59,7 +60,8 @@ class DDPG(OffPolicyAgent):
                                    buffer=buffer,
                                    save_dir=save_dir,
                                    save_memories=save_memories,
-                                   name=name)
+                                   name=name,
+                                   dtype=dtype)
         if (actor_opt is None or critic_opt is None) and training:
             raise ValueError('agent cannot be trained without optimizers')
         self._ac = actor_critic
@@ -103,18 +105,21 @@ class DDPG(OffPolicyAgent):
     def _minibatch_to_tf(self, minibatch):
         """ Given a list of experience tuples (s_t, a_t, r_t, s_t+1, done_t)
             returns list of 5 tensors batches """
-        state_batch = tf.convert_to_tensor([sample[0].reshape(self.state_shape)
-                                            for sample in minibatch], dtype=tf.float32)
+        states = np.array([sample[0].reshape(self.state_shape) for sample in minibatch])
+        next_states = np.array([sample[3].reshape(self.state_shape) for sample in minibatch])
+        if 'obs' in self.normalizers:
+            states = self.normalize('obs', states)
+            next_states = self.normalize('obs', next_states)
+        states_batch = tf.convert_to_tensor(states, dtype=tf.float32)
+        next_states_batch = tf.convert_to_tensor(next_states, dtype=tf.float32)
         action_batch = tf.convert_to_tensor([sample[1] for sample in minibatch], dtype=tf.float32)
         reward_batch = tf.convert_to_tensor([sample[2] for sample in minibatch], dtype=tf.float32)
         reward_batch = tf.expand_dims(reward_batch, 1)  # shape must be (batch, 1)
-        new_state_batch = tf.convert_to_tensor([sample[3].reshape(self.state_shape)
-                                                for sample in minibatch], dtype=tf.float32)
-        done_batch = tf.convert_to_tensor([sample[4] for sample in minibatch], dtype=tf.float32)
+        done_batch = tf.cast(tf.convert_to_tensor([sample[4] for sample in minibatch]), tf.float32)
         done_batch = tf.expand_dims(done_batch, 1)  # shape must be (batch, 1)
-        return [state_batch, action_batch, reward_batch, new_state_batch, done_batch]
+        return [states_batch, action_batch, reward_batch, next_states_batch, done_batch]
 
-    def _train(self, batch_size=None, *args, **kwargs):
+    def _train(self, batch_size=128, *args, **kwargs):
         self._memory.commit_ltmemory()
         assert self._training, 'called train function but agent is in evaluation mode'
         memories, indexes, is_weights = self._memory.sample(batch_size, vectorizing_fn=self._minibatch_to_tf)
@@ -158,6 +163,21 @@ class DDPG(OffPolicyAgent):
         update_target(source_vars=self._ac.variables,
                       target_vars=self._ac_target.variables,
                       tau=self._tau)
+        self._train_step += 1
+
+        if self.is_logging:
+            if self._log_gradients:
+                pi_grads_log = {f'actor/{".".join(var.name.split("/")[1:])}': grad.numpy()
+                                   for grad, var in pi_grads_and_vars}
+                critic_grads_log = {f'critic/{".".join(var.name.split("/")[1:])}': grad.numpy()
+                                    for grad, var in critic_grads_and_vars}
+                if self._gradient_clip_norm is not None:
+                    pi_grads_log['actor/norm'] = pi_norm
+                    critic_grads_log['critic/norm'] = critic_norm
+                self._log(do_log_step=False, prefix='gradients', **pi_grads_log, **critic_grads_log)
+            self._log(do_log_step=False, prefix='debug', state_values=q_values.numpy(), td_targets=targets.numpy())
+            self._log(do_log_step=True, policy_loss=float(pi_loss), critic_loss=float(q_loss),
+                      train_step_pi=self._train_step, train_step_v=self._train_step)
 
         return {'policy_loss': float(pi_loss), 'critic_loss': float(q_loss)}
 

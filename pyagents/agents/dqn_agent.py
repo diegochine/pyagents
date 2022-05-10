@@ -42,15 +42,18 @@ class DQNAgent(OffPolicyAgent):
                  name: str = 'DQNAgent',
                  training: bool = True,
                  save_dir: str = './output',
-                 wandb_params: Optional[dict] = None):
+                 wandb_params: Optional[dict] = None,
+                 dtype=tf.float32):
         super(DQNAgent, self).__init__(state_shape,
                                        action_shape,
                                        training=training,
                                        buffer=buffer,
                                        save_dir=save_dir,
-                                       name=name)
+                                       name=name,
+                                       dtype=dtype)
         if optimizer is None and training:
             raise ValueError('agent cannot be trained without optimizer')
+        assert isinstance(action_shape, int), 'current implementation only supports 1D discrete action spaces'
 
         self._gamma = gamma
         self._online_q_network = q_network
@@ -88,7 +91,9 @@ class DQNAgent(OffPolicyAgent):
 
     def _loss(self, memories):
         state_batch, action_batch, reward_batch, next_state_batch, done_batch = memories
-        current_q_values = self._online_q_network(state_batch)
+        mask = tf.one_hot(action_batch, self.action_shape)  # assumes 1d action space
+        mask = tf.cast(mask, tf.bool)
+        current_q_values = self._online_q_network(state_batch)[mask]
         next_target_q_values = self._target_q_network(next_state_batch)
 
         if self._ddqn:
@@ -100,13 +105,9 @@ class DQNAgent(OffPolicyAgent):
             tmp_rewards = tf.stop_gradient(
                 reward_batch + self._gamma * tf.math.reduce_max(next_target_q_values, axis=1))
 
-        target_values = tf.where(done_batch, reward_batch, tmp_rewards)
-        target_values = tf.stack([target_values for _ in range(self._action_shape)], axis=1)
-        update_idx = tf.convert_to_tensor([[i == a for i in range(self._action_shape)] for a in action_batch])
-        target_q_values = tf.where(update_idx, target_values, current_q_values)
+        target_q_values = tf.where(done_batch, reward_batch, tmp_rewards)
         # reshape qvals because of reduction axis
         td_loss = self._td_errors_loss_fn(tf.expand_dims(current_q_values, -1), tf.expand_dims(target_q_values, -1))
-        td_loss = tf.reduce_mean(td_loss, axis=-1)
         return td_loss
 
     def _train(self, batch_size=128, *args, **kwargs):
@@ -138,14 +139,17 @@ class DQNAgent(OffPolicyAgent):
     def _minibatch_to_tf(self, minibatch):
         """ Given a list of experience tuples (s_t, a_t, r_t, s_t+1, done_t)
             returns list of 5 tensors batches """
-        state_batch = tf.convert_to_tensor([sample[0].reshape(self.state_shape)
-                                            for sample in minibatch])
-        action_batch = tf.convert_to_tensor([sample[1] for sample in minibatch])
-        reward_batch = tf.convert_to_tensor([sample[2] for sample in minibatch])
-        new_state_batch = tf.convert_to_tensor([sample[3].reshape(self.state_shape)
-                                                for sample in minibatch])
+        states = np.array([sample[0].reshape(self.state_shape) for sample in minibatch])
+        next_states = np.array([sample[3].reshape(self.state_shape) for sample in minibatch])
+        if 'obs' in self.normalizers:
+            states = self.normalize('obs', states)
+            next_states = self.normalize('obs', next_states)
+        states_batch = tf.convert_to_tensor(states, dtype=self.dtype)
+        next_states_batch = tf.convert_to_tensor(next_states, dtype=self.dtype)
+        action_batch = tf.convert_to_tensor([sample[1] for sample in minibatch], dtype=tf.int32)
+        reward_batch = tf.convert_to_tensor([sample[2] for sample in minibatch], dtype=self.dtype)
         done_batch = np.array([sample[4] for sample in minibatch])
-        return [state_batch, action_batch, reward_batch, new_state_batch, done_batch]
+        return [states_batch, action_batch, reward_batch, next_states_batch, done_batch]
 
     def _networks_config_and_weights(self):
         net_config = self._online_q_network.get_config()
