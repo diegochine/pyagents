@@ -3,6 +3,7 @@ from abc import ABC
 from typing import Optional
 
 import numpy as np
+import tensorflow as tf
 
 from pyagents.agents import Agent
 from pyagents.memory import Buffer, UniformBuffer
@@ -16,13 +17,15 @@ class OffPolicyAgent(Agent, ABC):
                  buffer: Optional[Buffer] = None,
                  save_dir: str = './output',
                  save_memories: bool = False,
-                 name='OffPolicyAgent'):
+                 name='OffPolicyAgent',
+                 dtype=tf.float32):
         super(OffPolicyAgent, self).__init__(state_shape,
                                              action_shape,
                                              training,
                                              save_dir=save_dir,
                                              save_memories=save_memories,
-                                             name=name)
+                                             name=name,
+                                             dtype=dtype)
         if buffer is not None:
             buffer.set_save_dir(self._save_dir)
             self._memory: Buffer = buffer
@@ -37,36 +40,25 @@ class OffPolicyAgent(Agent, ABC):
     def memory_len(self):
         return len(self._memory)
 
-    def init(self, env, max_steps=2000, min_memories=None, actions=None):
-        print('Collecting initial memories')
+    def init(self, envs, env_config=None, min_memories=None, actions=None, *args, **kwargs):
+        super().init(envs, env_config=env_config, *args, **kwargs)
         if min_memories is None:
             min_memories = self._memory.get_config()['size_long']
-        while self.memory_len < min_memories:
-            s = env.reset()
-            done = False
-            step = 0
+        s_t = envs.reset()
+        for _ in range(min_memories // self.num_envs):
             self._memory.commit_ltmemory()
-            while not done and step < max_steps:
-                if actions is not None:
-                    a = np.random.choice(actions, 1)
-                else:
-                    a = env.action_space.sample()
-                new_state, r, done, _ = env.step(a)
-                self.remember(s, a, r, new_state, done)
-                s = new_state
-                step += 1
+            if actions is not None:
+                a_t = np.random.choice(actions, 1)
+            else:
+                a_t = envs.action_space.sample()
+            s_tp1, r_t, done, _ = envs.step(a_t)
+            self.remember(s_t, a_t, r_t, s_tp1, done)
+            s_t = s_tp1
 
-    def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool) -> None:
-        """
-        Saves piece of memory
-        :param state: state at current timestep
-        :param action: action at current timestep
-        :param reward: reward at current timestep
-        :param next_state: state at next timestep
-        :param done: whether the episode has ended
-        :return:
-        """
-        self._memory.commit_stmemory([state, action, reward, next_state, done])
+    def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool, *args, **kwargs) -> None:
+        """Saves piece of memory."""
+        for e in range(self.num_envs):  # TODO migliorare
+            self._memory.commit_stmemory([state[e], action[e], reward[e], next_state[e], done[e]])
 
     @abc.abstractmethod
     def _minibatch_to_tf(self, minibatch):

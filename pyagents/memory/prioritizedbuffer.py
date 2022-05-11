@@ -16,7 +16,7 @@ class PrioritizedBuffer(Buffer):
         self._size_long = size_long
         self.stmemory = deque(maxlen=size_short)
         self._idx = 0
-        self._max_p = 1/size_long
+        self._max_p = 0
         self._eps = eps
         self._alpha = alpha
         if isinstance(beta, int):

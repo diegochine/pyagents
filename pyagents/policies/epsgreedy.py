@@ -1,7 +1,7 @@
 import gin
 import numpy as np
 from pyagents.policies.policy import Policy
-from pyagents.policies.randompolicy import RandomPolicy
+from pyagents.policies.randomdiscretepolicy import RandomDiscretePolicy
 
 
 @gin.configurable
@@ -9,7 +9,7 @@ class EpsGreedyPolicy(Policy):
 
     def __init__(self, policy, epsilon=0.1, epsilon_decay=0.99, epsilon_min=0.01):
         self._policy = policy
-        self._random_policy = RandomPolicy(self._policy.state_shape, self._policy.action_shape)
+        self._random_policy = RandomDiscretePolicy(self._policy.state_shape, self._policy.action_shape)
         self._epsilon = epsilon
         self._epsilon_decay = epsilon_decay
         self._epsilon_min = epsilon_min

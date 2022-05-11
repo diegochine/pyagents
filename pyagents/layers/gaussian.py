@@ -3,20 +3,41 @@ import tensorflow_probability as tfp
 
 
 class GaussianLayer(tf.keras.layers.Layer):
-    def __init__(self, state_shape, action_shape, deterministic=False, name='Gaussian', dtype=tf.float32, **kwargs):
+    def __init__(self, state_shape, action_shape, bounds, deterministic=False, start_std=0.5, std_eps=0.01,
+                 name='Gaussian', dtype=tf.float32, **kwargs):
         super(GaussianLayer, self).__init__(name=name, dtype=dtype, **kwargs)
         self._state_shape = state_shape
         self._action_shape = action_shape
         self._deterministic = deterministic
-        self._actor_mean = tf.keras.layers.Dense(action_shape[0])  # assumes 1d action space
-        self._actor_std_dev = tf.keras.layers.Dense(action_shape[0], activation=tf.math.softplus)
+        # determine parameters for rescaling
+        lb, ub = bounds
+        self._act_means = tf.constant((ub + lb) / 2.0, shape=action_shape, dtype=dtype)
+        self._act_magnitudes = tf.constant((ub - lb) / 2.0, shape=action_shape, dtype=dtype)
+        self._mean_layer = tf.keras.layers.Dense(action_shape[0],  # assumes 1d action space
+                                                 kernel_initializer=tf.keras.initializers.Orthogonal(0.01),
+                                                 activation='tanh')
+        # initialize std dev variable(s)
+        std_init = tfp.math.softplus_inverse(start_std - std_eps)
+        self._std_dev = tf.Variable(initial_value=tf.fill(action_shape, std_init),
+                                    shape=self._action_shape,
+                                    trainable=True)
+        self._std_eps = std_eps
 
     def call(self, x, training=True):
-        mean = self._actor_mean(x)
-        std_dev = self._actor_std_dev(x)
+        mean = self._act_means + self._act_magnitudes * self._mean_layer(x)
+        std_dev = tf.math.softplus(self._std_dev) + self._std_eps
+        if self._action_shape == (1,):
+            mean = tf.squeeze(mean, axis=1)
+            gaussian = tfp.distributions.Normal(loc=mean, scale=std_dev)
+        else:
+            gaussian = tfp.distributions.MultivariateNormalDiag(loc=mean, scale=std_dev)
         if not training or self._deterministic:
             action = mean
         else:
-            gaussian = tfp.distributions.Normal(loc=mean, scale=std_dev)
             action = gaussian.sample()
-        return action, (mean, std_dev)
+        logprobs = gaussian.log_prob(action)
+        if self._action_shape == (1,):  # orribile
+            action = action[..., tf.newaxis]
+            mean = mean[..., tf.newaxis]
+            std_dev = std_dev[..., tf.newaxis]
+        return action, (mean, std_dev), logprobs

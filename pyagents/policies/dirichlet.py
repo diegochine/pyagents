@@ -20,6 +20,10 @@ class DirichletPolicy(Policy):
         self.scaling_factor = scaling_factor
         self._bounds = bounds
 
+    @property
+    def is_discrete(self):
+        return False
+
     def _act(self, obs, deterministic=False, mask=None, training=True):
         alpha = self._policy_network(obs.reshape(1, *obs.shape)).dist_params
         alpha = alpha.numpy()

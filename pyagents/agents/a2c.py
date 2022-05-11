@@ -56,6 +56,7 @@ class A2C(OnPolicyAgent):
         """
         super(A2C, self).__init__(state_shape,
                                   action_shape,
+                                  lam_gae=lam_gae,
                                   training=training,
                                   save_dir=save_dir,
                                   save_memories=save_memories,
@@ -64,7 +65,7 @@ class A2C(OnPolicyAgent):
             raise ValueError('agent cannot be trained without optimizer')
         self._actor_critic = actor_critic
         self._opt = opt
-        self._critic_loss_fn = tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)
+        self._critic_loss_fn = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)
 
         if policy is None:
             self._policy = self._actor_critic.get_policy()
@@ -75,7 +76,6 @@ class A2C(OnPolicyAgent):
 
         self.gamma = gamma
         self._entropy_coef = entropy_coef
-        self._lam_gae = lam_gae
         self._standardize = standardize
         self._gradient_clip_norm = gradient_clip_norm
 
@@ -92,6 +92,7 @@ class A2C(OnPolicyAgent):
                               {**self.config,
                                **{f'actor_critic/{k}': v for k, v in self._actor_critic.get_config().items()},
                                **log_dict})
+        self._actor_critic(tf.ones((1, *self.state_shape)))
 
     def _wandb_define_metrics(self):
         """Defines WandB metrics.
@@ -111,30 +112,43 @@ class A2C(OnPolicyAgent):
         critic_loss = self._critic_loss_fn(delta, ac_out.critic_values)
         return policy_loss, critic_loss, entropy_loss
 
-    def _train(self, batch_size=None, *args, **kwargs) -> dict:
-        states = tf.convert_to_tensor(self._current_trajectory.states, dtype=tf.float32)
-        actions = tf.convert_to_tensor(self._current_trajectory.actions, dtype=tf.float32)
+    def _train(self, batch_size, update_rounds, *args, **kwargs) -> dict:
+        states = tf.convert_to_tensor(self._memory['states'], dtype=tf.float32)
+        actions = tf.convert_to_tensor(self._memory['actions'], dtype=tf.float32)
+        next_states = tf.convert_to_tensor(self._memory['next_states'], dtype=tf.float32)
 
+        states = tf.reshape(states, (-1, *self.state_shape))
+        actions = tf.reshape(actions, (-1,))
+        next_states = tf.reshape(next_states, (-1, *self.state_shape))
         # GAE computation
-        state_values = self._actor_critic(tf.stack(self._current_trajectory.states)).critic_values
-        next_state_values = self._actor_critic(tf.stack(self._current_trajectory.next_states)).critic_values
+        state_values = self._actor_critic(states).critic_values
+        next_state_values = self._actor_critic(next_states).critic_values
         delta = tf.stop_gradient(self.compute_gae(state_values, next_state_values))
         if self._standardize:
             delta = ((delta - tf.math.reduce_mean(delta)) / (tf.math.reduce_std(delta) + self.eps))
 
-        # TODO shuffle minibatch?
+        indexes = np.arange(states.shape[0])
+        for _ in range(update_rounds):
+            np.random.shuffle(indexes)
+            for start in range(0, states.shape[0], batch_size):
+                end = start + batch_size
+                batch_indexes = indexes[start:end]
 
-        # forward pass and loss computation
-        with tf.GradientTape() as tape:
-            policy_loss, critic_loss, entropy_loss = self._loss((states, actions, tf.stop_gradient(delta)))
-            loss = policy_loss + critic_loss - entropy_loss
-        assert not tf.math.is_inf(loss) and not tf.math.is_nan(loss), f'{policy_loss, critic_loss, entropy_loss}'
+                # forward pass and loss computation
+                s_b = tf.gather(states, batch_indexes, axis=0)
+                a_b = tf.gather(actions, batch_indexes, axis=0)
+                d_b = tf.gather(delta, batch_indexes, axis=0)
+                with tf.GradientTape() as tape:
+                    policy_loss, critic_loss, entropy_loss = self._loss((s_b, a_b, tf.stop_gradient(d_b)))
+                    loss = policy_loss + critic_loss - entropy_loss
+                assert not tf.math.is_inf(loss) and not tf.math.is_nan(loss), f'{policy_loss, critic_loss, entropy_loss}'
 
-        # backward pass
-        grads = tape.gradient(loss, self._actor_critic.trainable_variables)
-        if self._gradient_clip_norm is not None:
-            grads, norm = tf.clip_by_global_norm(grads, self._gradient_clip_norm)
-        self._opt.apply_gradients(list(zip(grads, self._actor_critic.trainable_variables)))
+                # backward pass
+                grads = tape.gradient(loss, self._actor_critic.trainable_variables)
+                if self._gradient_clip_norm is not None:
+                    grads, norm = tf.clip_by_global_norm(grads, self._gradient_clip_norm)
+                self._opt.apply_gradients(list(zip(grads, self._actor_critic.trainable_variables)))
+
         self.clear_memory()
         return {'policy_loss': float(policy_loss),
                 'critic_loss': float(critic_loss),
