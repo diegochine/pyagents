@@ -149,13 +149,17 @@ def make_env(gym_id, seed, idx, capture_video, output_dir):
     def thunk():
         if not os.path.isdir(output_dir):
             os.mkdir(output_dir)
-        env = gym.make(gym_id)
+        env_args = dict()
+        if gym_id.startswith('ALE'):
+            env_args = dict(full_action_space=False,  # reduced action space for easier learning
+                            )
+        env = gym.make(gym_id, **env_args)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         if capture_video:
             if idx == 0:
                 if not os.path.isdir(f"{output_dir}/videos"):
                     os.mkdir(f"{output_dir}/videos")
-                env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos", episode_trigger=lambda s: (s % 500) == 0)
+                env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos", episode_trigger=lambda s: (s % 5) == 0)
         env.seed(seed)
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
@@ -180,20 +184,22 @@ if __name__ == "__main__":
                         help='number of parallel envs for vectorized environment')
     args = parser.parse_args()
     args.env = args.env.lower()
-    if args.env.startswith('c'):
-        gym_id = 'CartPole-v1'
-    elif args.env.startswith('p'):
-        gym_id = 'Pendulum-v1'
-    elif args.env.startswith('b'):
-        gym_id = 'BipedalWalker-v3'
-    elif args.env.startswith('a'):
+    if args.env.startswith('a'):
         gym_id = 'Acrobot-v1'
+    elif args.env.startswith('bi'):
+        gym_id = 'BipedalWalker-v3'
+    elif args.env.startswith('br'):
+        gym_id = 'ALE/Breakout-ram'
+    elif args.env.startswith('c'):
+        gym_id = 'CartPole-v1'
     elif args.env.startswith('l'):
         gym_id = 'LunarLander-v2'
+    elif args.env.startswith('p'):
+        gym_id = 'Pendulum-v1'
     else:
         raise ValueError(f'unsupported env {args.env}')
     if not args.output_dir:
-        args.output_dir = f'output/{args.agent}-{gym_id}'
+        args.output_dir = f'output/{args.agent}-{gym_id.replace("/", "-")}'
     seed = 42
     reset_random_seed(seed)
     if args.config:

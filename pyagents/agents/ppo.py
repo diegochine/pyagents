@@ -160,12 +160,12 @@ class PPO(OnPolicyAgent):
         # trackers for losses
         pi_losses, v_losses, e_losses = [], [], []
         # update normalizers, reshape to remove batch dimension(s)
-        states = self.normalize('obs', np.reshape(self._memory['states'], (self._rollout_size, -1)))
+        states = self.normalize('obs', self._memory['states'])
+        states = np.reshape(states, (self._rollout_size,) + self.state_shape)
         # convert inputs to tf tensors
         states = tf.convert_to_tensor(states, dtype=tf.float32)
-        actions = tf.convert_to_tensor(self._memory['actions'], dtype=tf.float32)
-        logprobs = tf.convert_to_tensor(self._memory['logprobs'], dtype=tf.float32)
-        states = tf.reshape(states, (self._rollout_size, -1))
+        actions = tf.convert_to_tensor(self._memory['actions'], dtype=self.dtype)
+        logprobs = tf.convert_to_tensor(self._memory['logprobs'], dtype=self.dtype)
         actions = tf.reshape(actions, (self._rollout_size, -1))
         logprobs = tf.reshape(logprobs, (self._rollout_size, -1))
 
@@ -174,9 +174,9 @@ class PPO(OnPolicyAgent):
         for _ in range(update_rounds):
             # compute gae and td(lambda) returns, once per data pass
             state_values = self._vf(states).critic_values
-            next_states = self.normalize('obs', np.reshape(self._memory['next_states'], (self._rollout_size, -1)))
-            next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
-            next_states = tf.reshape(next_states, (self._rollout_size, -1))
+            next_states = self.normalize('obs', self._memory['next_states'])
+            next_states = np.reshape(next_states, (self._rollout_size,) + self.state_shape)
+            next_states = tf.convert_to_tensor(next_states, dtype=self.dtype)
             next_state_values = self._vf(next_states).critic_values
 
             if 'returns' in self.normalizers:  # unnormalize value function predictions
