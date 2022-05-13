@@ -43,10 +43,9 @@ class OffPolicyAgent(Agent, ABC):
     def init(self, envs, env_config=None, min_memories=None, actions=None, *args, **kwargs):
         super().init(envs, env_config=env_config, *args, **kwargs)
         if min_memories is None:
-            min_memories = self._memory.get_config()['size_long']
+            min_memories = self._memory.get_config()['size']
         s_t = envs.reset()
         for _ in range(min_memories // self.num_envs):
-            self._memory.commit_ltmemory()
             if actions is not None:
                 a_t = np.random.choice(actions, 1)
             else:
@@ -57,8 +56,7 @@ class OffPolicyAgent(Agent, ABC):
 
     def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool, *args, **kwargs) -> None:
         """Saves piece of memory."""
-        for e in range(self.num_envs):  # TODO migliorare
-            self._memory.commit_stmemory([state[e], action[e], reward[e], next_state[e], done[e]])
+        self._memory.commit_stmemory((state, action, reward, next_state, done))
 
     @abc.abstractmethod
     def _minibatch_to_tf(self, minibatch):

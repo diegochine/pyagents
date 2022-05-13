@@ -10,14 +10,14 @@ from pyagents.memory.buffer import Buffer
 @gin.configurable
 class UniformBuffer(Buffer):
 
-    def __init__(self, save_dir=None, size_short=5000, size_long=50000, ltmemory=None):
+    def __init__(self,
+                 save_dir=None,
+                 size=50000,
+                 n_step_return=1):
         super().__init__(save_dir)
-        if ltmemory is not None:
-            self.ltmemory = ltmemory
-        else:
-            self.ltmemory = deque(maxlen=size_long)
-        self.stmemory = deque(maxlen=size_short)
-        self._config = {'size_long': size_long, 'size_short': size_short}
+        self._ltmemory = deque(maxlen=size)
+        self._n = n_step_return - 1
+        self._config = {'size': size}
 
     def __len__(self):
         return len(self.ltmemory)
@@ -25,15 +25,12 @@ class UniformBuffer(Buffer):
     def get_config(self):
         return self._config
 
-    def commit_stmemory(self, fragment, data_augmentation=None):
-        """
-        :param fragment: dictionary to save
-        :param data_augmentation: function to be applied in order to do data augmentation
-        """
-        if data_augmentation is not None:
-            pass
-
-        self.stmemory.append(fragment)
+    def commit_stmemory(self, fragment):
+        states, actions, rewards, next_states, dones = fragment
+        batch_size = states.shape[0]  # first dim is input batch size, i.e. n_envs
+        for b in range(batch_size):
+            lt_experience = (states[b], actions[b], rewards[b], next_states[b], dones[b])
+            self._ltmemory.append(lt_experience)
 
     def commit_ltmemory(self, **kwargs):
         for mem in self.stmemory:
@@ -45,7 +42,4 @@ class UniformBuffer(Buffer):
 
     def sample(self, batch_size, vectorizing_fn=lambda x: x):
         # no need to return samples indexes, and is_weights contains all ones (as it's not used)
-        return vectorizing_fn(random.sample(list(self.ltmemory), batch_size)), [], np.ones(batch_size)
-
-    def clear_ltmemory(self):
-        self.ltmemory.clear()
+        return vectorizing_fn(random.sample(list(self._ltmemory), batch_size)), [], np.ones(batch_size)
