@@ -110,6 +110,7 @@ class PPO(OnPolicyAgent):
         self._pi(tf.ones((1, *state_shape))), self._vf(tf.ones((1, *state_shape)))  # TODO remove
 
     def _wandb_define_metrics(self):
+        super()._wandb_define_metrics()
         wandb.define_metric('policy_loss', step_metric='train_step_pi', summary="min")
         wandb.define_metric('critic_loss', step_metric='train_step_v', summary="min")
         wandb.define_metric('entropy_loss', step_metric='train_step_pi', summary="min")
@@ -117,6 +118,8 @@ class PPO(OnPolicyAgent):
         wandb.define_metric('approx_kl', step_metric='train_step_pi', summary="max")
         wandb.define_metric('state_values', step_metric='train_step_v', summary="max")
         wandb.define_metric('td_targets', step_metric='train_step_v', summary="max")
+        wandb.define_metric('avg_td_target', step_metric='train_step_v', summary="max")
+        wandb.define_metric('avg_state_value', step_metric='train_step_v', summary="max")
 
     def _loss(self, states, actions, adv, logprobs, returns):
         policy_loss, entropy_loss, info = self._loss_pi(states=states,
@@ -251,9 +254,13 @@ class PPO(OnPolicyAgent):
                         if self._gradient_clip_norm is not None:
                             critic_grads_log['critic/norm'] = critic_norm
                         self._log(do_log_step=False, prefix='gradients', **critic_grads_log)
+                    values_log = tf.gather(state_values, batch_indexes, axis=0).numpy()
+                    targets_log = tf.gather(unnormalized_returns, batch_indexes, axis=0).numpy()
                     self._log(do_log_step=False, prefix='debug',
-                              state_values=tf.gather(state_values, batch_indexes, axis=0).numpy(),
-                              td_targets=tf.gather(unnormalized_returns, batch_indexes, axis=0).numpy())
+                              state_values=values_log,
+                              td_targets=targets_log,
+                              avg_state_value=np.mean(values_log),
+                              avg_td_target=np.mean(targets_log))
                     self._log(do_log_step=True, critic_loss=loss_info['critic_loss'], train_step_v=self._train_step_v)
 
                 pi_losses.append(float(loss_info['policy_loss']))

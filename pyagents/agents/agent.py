@@ -72,6 +72,10 @@ class Agent(tf.Module, abc.ABC):
         self.dtype = dtype
 
     @property
+    def train_step(self) -> int:
+        return self._train_step
+
+    @property
     def state_shape(self) -> tuple:
         return self._state_shape
 
@@ -249,6 +253,7 @@ class Agent(tf.Module, abc.ABC):
             dict of losses
         """
         losses_dict = self._train(batch_size, update_rounds, *args, **kwargs)
+        self._train_step += update_rounds
         return losses_dict
 
     def remember(self,
@@ -273,9 +278,11 @@ class Agent(tf.Module, abc.ABC):
     def _wandb_define_metrics(self):
         """Defines WandB metrics.
 
-        Subclasses must implement this function to enable WandB logging.
+        Subclasses must implement this function to enable custom WandB logging.
         """
-        raise NotImplementedError('Must implement _wandb_define_metrics method to enable WandB logging.')
+        wandb.define_metric('train_step', summary="max")
+        wandb.define_metric('avg_return', step_metric="train_step", summary="max")
+        wandb.define_metric('avg_len', step_metric="train_step", summary="max")
 
     def _do_save_memories(self):
         pass

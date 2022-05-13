@@ -103,6 +103,7 @@ class VPG(OnPolicyAgent):
         self._actor(tf.ones((1, *state_shape))), self._baseline(tf.ones((1, *state_shape)))  # TODO remove
 
     def _wandb_define_metrics(self):
+        super()._wandb_define_metrics()
         wandb.define_metric('policy_loss', step_metric="train_step", summary="min")
         wandb.define_metric('critic_loss', step_metric="train_step", summary="min")
         wandb.define_metric('entropy_loss', step_metric="train_step", summary="min")

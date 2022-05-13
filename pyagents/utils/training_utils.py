@@ -39,6 +39,7 @@ def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
         if episodes > 0:
             train_info['avg_return'] /= episodes
             train_info['avg_len'] /= episodes
+            train_info['train_step'] = agent.train_step
             train_info = {**train_info, **loss_dict}
         else:
             train_info = loss_dict
@@ -79,6 +80,7 @@ def train_off_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
         if episodes > 0:
             train_info['avg_return'] /= episodes
             train_info['avg_len'] /= episodes
+            train_info['train_step'] = agent.train_step
             train_info = {**train_info, **loss_dict}
         else:
             train_info = loss_dict

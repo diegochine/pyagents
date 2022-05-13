@@ -159,7 +159,7 @@ def make_env(gym_id, seed, idx, capture_video, output_dir):
             if idx == 0:
                 if not os.path.isdir(f"{output_dir}/videos"):
                     os.mkdir(f"{output_dir}/videos")
-                env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos", episode_trigger=lambda s: (s % 5) == 0)
+                env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos", episode_trigger=lambda s: (s % 10) == 0)
         env.seed(seed)
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
@@ -169,6 +169,8 @@ def make_env(gym_id, seed, idx, capture_video, output_dir):
 
 
 if __name__ == "__main__":
+    import warnings
+    warnings.filterwarnings('ignore', category=DeprecationWarning)
     parser = ArgumentParser(description="Script for training a sample agent on Gym")
     parser.add_argument('-a', '--agent', type=str, help='which agent to use, either DQN, VPG, A2C or DDPG')
     parser.add_argument('-c', '--config', type=str, default='', help='path to gin config file')

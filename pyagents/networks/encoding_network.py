@@ -2,6 +2,7 @@ import gin
 import numpy as np
 import tensorflow as tf
 from pyagents.networks.network import Network
+from pyagents.layers.noisynet import NoisyLayer
 
 
 @gin.configurable
@@ -13,11 +14,13 @@ class EncodingNetwork(Network):
                  fc_params=None,
                  dropout_params=None,
                  activation='tanh',
+                 noisy_layers=False,
                  dtype=tf.float32,
                  name='EncodingNetwork',
                  conv_type='2d'):
         super().__init__(name=name)
         self._state_shape = state_shape
+        self.noisy_layers = noisy_layers
 
         # TODO improve inizialization, allow initizializer to be passed as parameter
         kernel_initializer = tf.keras.initializers.Orthogonal(np.sqrt(2))
@@ -57,11 +60,14 @@ class EncodingNetwork(Network):
             assert isinstance(dropout_params,
                               (tuple, list)), f'unrecognized type for dropout_params {type(dropout_params)} '
         if fc_params:
+            if noisy_layers:
+                fc_layer = NoisyLayer
+            else:
+                fc_layer = tf.keras.layers.Dense
             assert len(fc_params) == len(dropout_params), f'params length do not match (fc: {len(fc_params)}, dropout: {len(dropout_params)})'
             for num_units, dropout in zip(fc_params, dropout_params):
                 kernel_regularizer = None  # if necessary sholud have wheight decay param as in tf
-                layers.append(
-                    tf.keras.layers.Dense(
+                layers.append(fc_layer(
                         units=num_units,
                         activation=activation,
                         kernel_initializer=kernel_initializer,
@@ -70,15 +76,13 @@ class EncodingNetwork(Network):
                 if dropout is not None:
                     layers.append(tf.keras.layers.Dropout(rate=dropout))
 
-        # Pull out the nest structure of the preprocessing layers. This avoids
-        # saving the original kwarg layers as a class attribute which Keras would
-        # then track.
         self._postprocessing_layers = layers
         self.built = True  # Allow access to self.variables
         self._config = {'state_shape': state_shape,
                         'conv_params': conv_params if conv_params else tuple(),
                         'fc_params': fc_params if conv_params else tuple(),
                         'dropout_params': dropout_params if dropout_params else tuple(),
+                        'noisy_layers': noisy_layers,
                         'activation': activation,
                         'dtype': dtype,
                         'name': name,
@@ -101,3 +105,9 @@ class EncodingNetwork(Network):
         they must be a list of already built layer and not a list
         of their configurations."""
         return cls(**config)
+
+    def reset_noise(self):
+        """Resets noise of noisy layers"""
+        for layer in self._postprocessing_layers:
+            if isinstance(layer, NoisyLayer):
+                layer.reset_noise()
