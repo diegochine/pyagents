@@ -306,13 +306,7 @@ class Agent(tf.Module, abc.ABC):
                 k_group.attrs['count'] = v['count']
 
             for net_name, net_config, net_weights in self._networks_config_and_weights():
-                net_config_group = f.create_group(f'{net_name}_config')
-                for k, v in net_config.items():
-                    if isinstance(v, (dict, list, tuple)):
-                        v = json.dumps(v, default=json_utils.get_json_type).encode('utf8')
-                        net_config_group.attrs.create(k, np.void(v))
-                    elif v is not None:
-                        net_config_group.attrs[k] = v
+                Agent.dump_dict(f, f'{net_name}_config', net_config)
 
                 net_weights_group = f.create_group(f'{net_name}_weights')
                 for i, lay_weights in enumerate(net_weights):
@@ -321,6 +315,32 @@ class Agent(tf.Module, abc.ABC):
             f.flush()
         finally:
             f.close()
+
+    @staticmethod
+    def dump_dict(parent_group, k_dict, v_dict):
+        k_group = parent_group.create_group(k_dict)
+        for k, v in v_dict.items():
+            if isinstance(v, (list, tuple)):
+                v = json.dumps(v, default=json_utils.get_json_type).encode('utf8')
+                k_group.attrs.create(k, np.void(v))
+            elif isinstance(v, dict):
+                Agent.dump_dict(k_group, k, v)
+            elif v is not None:
+                k_group.attrs[k] = v
+
+    @staticmethod
+    def read_nested_groups(cfg, parent_group):
+        for k, v in parent_group.items():
+            result = dict()
+            Agent.read_nested_groups(result, v)
+            cfg[k] = result
+            for key, value in v.attrs.items():
+                if isinstance(value, np.void):
+                    result[key] = json_utils.decode(value.tobytes())
+                else:
+                    if value == '[]':
+                        value = None
+                    result[key] = value
 
     @staticmethod
     @abc.abstractmethod
@@ -352,6 +372,7 @@ class Agent(tf.Module, abc.ABC):
         for net_name, net_class in cls.networks_name():
             net_config = {}
             net_config_group = f[f'{net_name}_config']
+            Agent.read_nested_groups(net_config, net_config_group)
             for k, v in net_config_group.attrs.items():
                 if isinstance(v, np.void):
                     net_config[k] = json_utils.decode(v.tobytes())
