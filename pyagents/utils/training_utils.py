@@ -150,7 +150,7 @@ def train_agent(agent, train_envs, test_env=None, training_steps=10 ** 5, batch_
     return agent, scores
 
 
-def test_agent(agent, env, n_episodes=10, max_steps=500, render=True):
+def test_agent(agent, env, n_episodes=100, max_steps=500, render=True):
     scores = []
     for episode in range(1, n_episodes + 1):
         s_t = env.reset()

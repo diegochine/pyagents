@@ -14,11 +14,8 @@ class QPolicy(Policy):
         return True
 
     def _act(self, obs, mask=None, training=True):
-        qvals = self._q_network(obs)
-        if mask is not None:
-            assert isinstance(mask, np.ndarray)
-            qvals = tf.where(mask, qvals, np.NINF)
-        return PolicyOutput(actions=tf.argmax(qvals, axis=1).numpy())
+        q_out = self._q_network(obs, mask=mask)
+        return PolicyOutput(values=q_out.critic_values, actions=q_out.actions.numpy())
 
     def _distribution(self, obs):
         qvals = self._q_network(obs.reshape(1, *obs.shape))

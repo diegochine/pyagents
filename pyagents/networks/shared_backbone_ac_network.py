@@ -65,6 +65,6 @@ class SharedBackboneACNetwork(Network):
         state = self._backbone(inputs, training=training)
         pi_out = self._policy_head(state)
         critic_out = self._critic_head(state)
-        return NetworkOutput(action=pi_out.action,
+        return NetworkOutput(actions=pi_out.action,
                              dist_params=pi_out.dist_params,
                              critic_values=critic_out.critic_values)

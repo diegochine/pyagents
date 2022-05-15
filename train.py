@@ -6,8 +6,9 @@ import numpy as np
 import gym
 from argparse import ArgumentParser
 
-from pyagents.agents import DQNAgent, VPG, A2C, DDPG, PPO
-from pyagents.networks import DiscreteQNetwork, PolicyNetwork, ValueNetwork, SharedBackboneACNetwork, ACNetwork
+from pyagents.agents import DQNAgent, DistributionalDQNAgent, VPG, A2C, DDPG, PPO
+from pyagents.networks import DiscreteQNetwork, PolicyNetwork, ValueNetwork, SharedBackboneACNetwork, ACNetwork, \
+    DistributionalQNetwork
 from pyagents.memory import PrioritizedBuffer, UniformBuffer
 from pyagents.utils import train_agent
 import tensorflow as tf
@@ -59,12 +60,19 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
     if algo == 'dqn':
         assert isinstance(action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
         action_shape = action_space.n
-        buffer = PrioritizedBuffer() if buffer == 'prioritized' else UniformBuffer()
         q_net = DiscreteQNetwork(state_shape, action_shape)
         optim = Adam(learning_rate=act_learning_rate)
         agent = DQNAgent(state_shape, action_shape, q_network=q_net, buffer=buffer, optimizer=optim,
                          name='dqn', wandb_params=wandb_params, save_dir=output_dir,
                          log_dict={'learning_rate': act_start_learning_rate})
+    elif algo == 'distributionaldqn':
+        assert isinstance(action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
+        action_shape = action_space.n
+        q_net = DistributionalQNetwork(state_shape, action_shape)
+        optim = Adam(learning_rate=act_learning_rate)
+        agent = DistributionalDQNAgent(state_shape, action_shape, q_net, buffer=buffer, optimizer=optim,
+                                       name='dqn', wandb_params=wandb_params, save_dir=output_dir,
+                                       log_dict={'learning_rate': act_start_learning_rate})
     elif algo == 'vpg':
         if isinstance(action_space, gym.spaces.Discrete):
             action_shape = (action_space.n,)
@@ -170,6 +178,7 @@ def make_env(gym_id, seed, idx, capture_video, output_dir):
 
 if __name__ == "__main__":
     import warnings
+
     warnings.filterwarnings('ignore', category=DeprecationWarning)
     parser = ArgumentParser(description="Script for training a sample agent on Gym")
     parser.add_argument('-a', '--agent', type=str, help='which agent to use, either DQN, VPG, A2C or DDPG')
@@ -196,6 +205,8 @@ if __name__ == "__main__":
         gym_id = 'CartPole-v1'
     elif args.env.startswith('l'):
         gym_id = 'LunarLander-v2'
+    elif args.env.startswith('m'):
+        gym_id = 'MountainCar-v0'
     elif args.env.startswith('p'):
         gym_id = 'Pendulum-v1'
     else:

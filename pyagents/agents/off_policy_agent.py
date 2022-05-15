@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 from pyagents.agents import Agent
-from pyagents.memory import Buffer, UniformBuffer
+from pyagents.memory import Buffer, UniformBuffer, PrioritizedBuffer
 
 
 class OffPolicyAgent(Agent, ABC):
@@ -26,11 +26,15 @@ class OffPolicyAgent(Agent, ABC):
                                              save_memories=save_memories,
                                              name=name,
                                              dtype=dtype)
-        if buffer is not None:
+        if isinstance(buffer, Buffer):
             buffer.set_save_dir(self._save_dir)
             self._memory: Buffer = buffer
-        else:
+        elif buffer == 'uniform':
             self._memory: Buffer = UniformBuffer(save_dir=self._save_dir)
+        elif buffer == 'prioritized':
+            self._memory: Buffer = PrioritizedBuffer(save_dir=save_dir)
+        else:
+            raise ValueError(f'unrecognized buffer param {buffer}')
 
     @property
     def on_policy(self):

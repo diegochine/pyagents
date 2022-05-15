@@ -6,3 +6,4 @@ from pyagents.networks.policy_network import PolicyNetwork
 from pyagents.networks.value_network import ValueNetwork
 from pyagents.networks.ac_network import ACNetwork
 from pyagents.networks.shared_backbone_ac_network import SharedBackboneACNetwork
+from pyagents.networks.distributional_qnetwork import DistributionalQNetwork

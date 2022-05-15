@@ -11,8 +11,8 @@ from keras.losses import MeanSquaredError, Huber
 
 from pyagents.agents.agent import update_target
 from pyagents.agents.off_policy_agent import OffPolicyAgent
-from pyagents.utils import json_utils, types
-from pyagents.memory import Buffer, UniformBuffer, load_memories
+from pyagents.utils import types
+from pyagents.memory import load_memories
 from pyagents.networks import DiscreteQNetwork
 from pyagents.policies import QPolicy, EpsGreedyPolicy, Policy
 from copy import deepcopy
@@ -34,7 +34,7 @@ class DQNAgent(OffPolicyAgent):
                  target_update_period: int = 500,
                  tau: types.Float = 1.0,
                  ddqn: bool = True,
-                 buffer: Optional[Buffer] = None,
+                 buffer: Optional = 'uniform',
                  loss_fn: str = 'mse',
                  gradient_clip_norm: Optional[types.Float] = 0.5,
                  log_dict: dict = None,
@@ -121,21 +121,22 @@ class DQNAgent(OffPolicyAgent):
     def _loss(self, memories, weights=None):
         state_batch, action_batch, reward_batch, next_state_batch, done_batch = memories
         # boolean mask to choose only performed actions, assumes 1d action space
-        mask = tf.one_hot(action_batch, self.action_shape,  on_value=True, off_value=False)
+        mask = tf.one_hot(action_batch, self.action_shape, on_value=True, off_value=False)
 
-        preds_q_values = self._online_q_network(state_batch)[mask]
-        next_target_q_values = self._target_q_network(next_state_batch)
+        q_out = self._online_q_network(state_batch, training=True)
+        preds_q_values = q_out.critic_values[mask]
+        next_target_q_values = self._target_q_network(next_state_batch).critic_values
 
         if self._ddqn:
             # double q-learning: select actions using online network, and evaluate them using target network
-            next_online_q_values = self._online_q_network(next_state_batch)
+            next_online_q_values = self._online_q_network(next_state_batch).critic_values
             actions = tf.one_hot(tf.math.argmax(next_online_q_values, axis=1),
                                  self.action_shape, on_value=True, off_value=False)
-            bootstrap_rews = tf.stop_gradient(reward_batch + self._gamma * next_target_q_values[actions])
+            bootstrap_values = next_target_q_values[actions]
         else:
             # standard dqn target
-            bootstrap_rews = tf.stop_gradient(
-                reward_batch + self._gamma * tf.math.reduce_max(next_target_q_values, axis=1))
+            bootstrap_values = tf.math.reduce_max(next_target_q_values, axis=1)
+        bootstrap_rews = tf.stop_gradient(reward_batch + self._gamma * bootstrap_values)
 
         target_q_values = tf.where(done_batch, reward_batch, bootstrap_rews)
         # loss function reduces last axis, so we reshape to add a dummy one

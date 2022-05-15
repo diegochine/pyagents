@@ -4,8 +4,8 @@ from collections import namedtuple
 import tensorflow as tf
 
 NetworkOutput = namedtuple('NetworkOutput',
-                           ('action', 'dist_params', 'critic_values', 'logprobs'),
-                           defaults=(None, None, None, None))  # no parameter required
+                           ('actions', 'dist_params', 'critic_values', 'logprobs', 'logits'),
+                           defaults=(None, None, None, None, None))  # no parameter required
 
 
 class Network(tf.keras.layers.Layer, ABC):

@@ -17,10 +17,14 @@ class UniformBuffer(Buffer):
         super().__init__(save_dir)
         self._ltmemory = deque(maxlen=size)
         self._n = n_step_return - 1
-        self._config = {'size': size}
+        self._config = {'size': size, 'n_step_return': n_step_return}
 
     def __len__(self):
         return len(self.ltmemory)
+
+    @property
+    def n_step_return(self):
+        return self._n + 1
 
     def get_config(self):
         return self._config

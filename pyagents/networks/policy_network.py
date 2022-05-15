@@ -129,6 +129,6 @@ class PolicyNetwork(Network):
         # if self._bounds is not None:  # FIXME secondo me da spostare su agent
         #     lb, ub = self._bounds
         #     action = tf.clip_by_value(action, lb, ub)
-        return NetworkOutput(action=action,
+        return NetworkOutput(actions=action,
                              dist_params=dist_params,
                              logprobs=logprobs)

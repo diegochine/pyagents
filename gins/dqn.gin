@@ -1,25 +1,27 @@
-get_agent.buffer = 'prioritized'
-get_agent.act_start_learning_rate = 5e-4
+get_agent.buffer = 'uniform'
+get_agent.act_start_learning_rate = 1e-3
 get_agent.schedule = True
 get_agent.training_steps = 100000
 
 train_agent.training_steps = 100000
 train_agent.rollout_steps = 1
-train_agent.test_every = 100
+train_agent.test_every = 500
 train_agent.update_rounds = 1
 train_agent.batch_size = 64
-train_agent.init_params = {"min_memories": 90000}
+train_agent.init_params = {"min_memories": 50000}
 
 DQNAgent.gamma = 0.99
+DQNAgent.ddqn = True
 DQNAgent.epsilon = 1.0
 DQNAgent.epsilon_decay = 0.999
-DQNAgent.target_update_period = 50
+DQNAgent.target_update_period = 25
 DQNAgent.loss_fn = 'mse'
+DQNAgent.tau = 0.95
 
 DiscreteQNetwork.fc_params = (64, 64)
 DiscreteQNetwork.dropout_params = 0.1
-DiscreteQNetwork.noisy_layers = True
+DiscreteQNetwork.noisy_layers = False
 
 PrioritizedBuffer.n_step_return = 3
 
-get_agent.wandb_params = {'key': 'KEY', 'project': 'test', 'entity': 'mazelions', 'tags': ['dqn']}
+#get_agent.wandb_params = {'key': 'bb91b382cc121df7e109ec0ad0275f1accc4c2f4', 'project': 'test', 'entity': 'mazelions', 'tags': ['dqn']}

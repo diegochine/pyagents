@@ -8,11 +8,12 @@ from pyagents.networks.encoding_network import EncodingNetwork
 
 
 @gin.configurable
-class DiscreteQNetwork(Network):
+class DistributionalQNetwork(Network):
     """A DQN for discrete action spaces, taking in input a state and outputting [Q(s, a_1), ..., Q(s, a_n)]"""
 
     def __init__(self, state_shape,
                  action_shape,
+                 n_atoms=51,
                  conv_params=None,
                  fc_params=(64, 64),
                  dropout_params=None,
@@ -31,7 +32,7 @@ class DiscreteQNetwork(Network):
                         'activation': activation,
                         'noisy_layers': noisy_layers,
                         'dueling': dueling,
-                        'name': name}
+                        'n_atoms': n_atoms}
         self._encoder = EncodingNetwork(
             state_shape,
             conv_params=conv_params,
@@ -41,15 +42,20 @@ class DiscreteQNetwork(Network):
             activation=activation,
             name=name
         )
-        self._q_layer = QLayer(action_shape,
-                               units=fc_params[-1],
-                               dropout=dropout_params,
-                               dueling=dueling,
-                               noisy_layers=noisy_layers)
+        self._q_layer = QLayer(action_shape, units=fc_params[-1], dropout=dropout_params, dueling=dueling,
+                               noisy_layers=noisy_layers, n_atoms=n_atoms)
+        self._support = None
 
     @property
     def noisy_layers(self):
         return self._encoder.noisy_layers
+
+    @property
+    def n_atoms(self):
+        return self._config['n_atoms']
+
+    def set_support(self, support):
+        self._support = support
 
     def reset_noise(self):
         """Noisy layers' noise reset"""
@@ -58,11 +64,18 @@ class DiscreteQNetwork(Network):
 
     def call(self, inputs, training=False, mask=None):
         state = self._encoder(inputs, training=training)
-        qvals = self._q_layer(state, training=training)
+        qvals_logits = self._q_layer(state, training=training)
+        # normalize returns distribution
+        qvals_dist = tf.nn.softmax(qvals_logits, axis=2)
+        # compute qvalues as z^T · p(s, a | theta)
+        qvals = tf.tensordot(qvals_dist, self._support, axes=1)
+
         if mask is not None:
             qvals = tf.where(mask, qvals, np.NINF)
-        action = tf.argmax(qvals, axis=1)
-        return NetworkOutput(critic_values=qvals, actions=action)
+
+        actions = tf.argmax(qvals, axis=1)
+        # note that dist params refers to values instead of actions (differently from e.g. vpg and ppo)
+        return NetworkOutput(critic_values=qvals, actions=actions, logits=qvals_logits, dist_params=qvals_dist)
 
     def get_config(self):
         config = super().get_config()

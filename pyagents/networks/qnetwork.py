@@ -11,11 +11,22 @@ class QNetwork(Network):
     """A generic DQN for both discrete and continuous action spaces, taking in input a (state, action) pair
      and outputting Q(state, action) """
 
-    def __init__(self, state_shape, action_shape,
-                 obs_conv_params=None, obs_fc_params=(64, 64), obs_dropout_params=None, obs_activation='relu',
-                 act_fc_params=None, act_dropout_params=None, act_activation='relu',
-                 fc_params=(64, 64), dropout_params=None, activation='relu',
-                 name='QNetwork', trainable=True, dtype=tf.float32, dueling=False):
+    def __init__(self, state_shape,
+                 action_shape,
+                 obs_conv_params=None,
+                 obs_fc_params=(64, 64),
+                 obs_dropout_params=None,
+                 obs_activation='relu',
+                 act_fc_params=None,
+                 act_dropout_params=None,
+                 act_activation='relu',
+                 fc_params=(64, 64),
+                 dropout_params=None,
+                 activation='relu',
+                 name='QNetwork',
+                 trainable=True,
+                 dtype=tf.float32,
+                 dueling=False):
         super().__init__(name=name, trainable=trainable, dtype=dtype)
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,

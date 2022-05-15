@@ -11,7 +11,6 @@ import wrapt
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import tensor_shape
 
-import pyagents.layers
 
 try:
     # This import only works on python 3.3 and above.
@@ -85,8 +84,6 @@ def _decode_helper(obj):
     if isinstance(obj, dict) and 'class_name' in obj:
         if obj['class_name'] == 'TensorShape':
             return tensor_shape.TensorShape(obj['items'])
-        elif obj['class_name'] == 'RescalingLayer':
-            return pyagents.layers.RescalingLayer(**obj['config'])
         elif obj['class_name'] == '__tuple__':
             return tuple(_decode_helper(i) for i in obj['items'])
         elif obj['class_name'] == '__ellipsis__':
