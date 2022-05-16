@@ -19,6 +19,16 @@ class EpsGreedyPolicy(Policy):
         self._epsilon = max(self._epsilon_min, self._epsilon * self._epsilon_decay)
 
     @property
+    def is_discrete(self):
+        return True  # TODO should also work for continuous policies
+
+    def log_prob(self, output, action):
+        raise NotImplementedError('method not exposed by eps greedy')
+
+    def entropy(self, output):
+        raise NotImplementedError('method not exposed by eps greedy')
+
+    @property
     def epsilon(self):
         return self._epsilon
 
