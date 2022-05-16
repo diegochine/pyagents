@@ -62,7 +62,7 @@ class DQNAgent(OffPolicyAgent):
         self._tau = tau
         self._optimizer = optimizer
         self._td_errors_loss_fn = MeanSquaredError(reduction='none') if loss_fn == 'mse' else Huber(reduction='none')
-        self._train_step = tf.Variable(0, trainable=False, name="train step counter")
+        self._train_step = 0
         self._ddqn = ddqn
         self._gradient_clip_norm = gradient_clip_norm
         self._name = name
@@ -126,7 +126,7 @@ class DQNAgent(OffPolicyAgent):
             grads, norm = tf.clip_by_global_norm(grads, self._gradient_clip_norm)
         grads_and_vars = list(zip(grads, variables_to_train))
         self._optimizer.apply_gradients(grads_and_vars)
-        self._train_step.assign_add(1)
+        self._train_step += 1
         if tf.math.mod(self._train_step, self._target_update_period) == 0:
             update_target(source_vars=self._online_q_network.variables,
                           target_vars=self._target_q_network.variables,

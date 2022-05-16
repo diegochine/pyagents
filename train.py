@@ -1,6 +1,7 @@
 import argparse
 import os
 import random
+from functools import partial
 
 import numpy as np
 import gym
@@ -155,11 +156,10 @@ def make_env(gym_id, seed, idx, capture_video, output_dir):
                             )
         env = gym.make(gym_id, **env_args)
         env = gym.wrappers.RecordEpisodeStatistics(env)
-        if capture_video:
-            if idx == 0:
-                if not os.path.isdir(f"{output_dir}/videos"):
-                    os.mkdir(f"{output_dir}/videos")
-                env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos", episode_trigger=lambda s: (s % 5) == 0)
+        if capture_video and idx == 0:
+            if not os.path.isdir(f"{output_dir}/videos"):
+                os.mkdir(f"{output_dir}/videos")
+            env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos", episode_trigger=lambda s: (s % 100) == 0)
         env.seed(seed)
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
@@ -202,20 +202,21 @@ if __name__ == "__main__":
         raise ValueError(f'unsupported env {args.env}')
     if not args.output_dir:
         args.output_dir = f'output/{args.agent}-{gym_id.replace("/", "-")}'
-    seed = 42
-    reset_random_seed(seed)
+    reset_random_seed(args.seed)
     if args.test_ver is not None:
         agent = load_agent(args.agent, args.output_dir, args.test_ver)
-        env = make_env(gym_id, seed, 0, True, args.output_dir)()
-        scores = test_agent(agent, env)
+        env = make_env(gym_id, args.seed, 0, True, args.output_dir)()
+        scores = test_agent(agent, env, args.seed)
         exit()
 
     for cfg_file in os.listdir(args.config_dir):
         gin.parse_config_file(os.path.join(args.config_dir, cfg_file))
         train_envs = gym.vector.SyncVectorEnv(
-            [make_env(gym_id, (seed * (i + 1)) ** 2, i, False, args.output_dir)
+            [make_env(gym_id, (args.seed * (i + 101)) ** 2, i, False, args.output_dir)
              for i in range(args.num_envs)])
-        test_env = gym.vector.SyncVectorEnv([make_env(gym_id, seed, 0, args.video, args.output_dir)])
+        test_envs = gym.vector.SyncVectorEnv(
+            [make_env(gym_id, (args.seed * (i + 8)) ** 2, i, args.video, args.output_dir)
+             for i in range(100)])  # test for 100 runs
         agent = get_agent(args.agent, train_envs, output_dir=args.output_dir, gym_id=gym_id)
-        agent, scores = train_agent(agent, train_envs, test_env, output_dir=args.output_dir)
+        agent, scores = train_agent(agent, train_envs, test_envs, output_dir=args.output_dir)
         agent.save(ver=-1)
