@@ -182,7 +182,7 @@ if __name__ == "__main__":
     warnings.filterwarnings('ignore', category=DeprecationWarning)
     parser = ArgumentParser(description="Script for training a sample agent on Gym")
     parser.add_argument('-a', '--agent', type=str, help='which agent to use, either DQN, VPG, A2C or DDPG')
-    parser.add_argument('-c', '--config', type=str, default='', help='path to gin config file')
+    parser.add_argument('-c', '--config-dir', type=str, default='', help='path to dir containing gin config file')
     parser.add_argument('-tv', '--test-ver', type=int, default=None,
                         help='if -1, use final version; if >=0, performs evaluation using this version')
     parser.add_argument('-e', '--env', type=str, default='cartpole',
@@ -191,6 +191,8 @@ if __name__ == "__main__":
                         help='number of parallel envs for vectorized environment')
     parser.add_argument('-o', '--output-dir', type=str, default='',
                         help='directory where to store trained agent(s)')
+    parser.add_argument('-s', '--seed', type=int, default=42,
+                        help='random seed')
     parser.add_argument('--video', action=argparse.BooleanOptionalAction, default=False,
                         help='number of parallel envs for vectorized environment')
     args = parser.parse_args()
@@ -215,13 +217,14 @@ if __name__ == "__main__":
         args.output_dir = f'output/{args.agent}-{gym_id.replace("/", "-")}'
     seed = 42
     reset_random_seed(seed)
-    if args.config:
-        gin.parse_config_file(args.config)
     if args.test_ver is not None:
         agent = load_agent(args.agent, args.output_dir, args.test_ver)
         env = make_env(gym_id, seed, 0, True, args.output_dir)()
         scores = test_agent(agent, env)
-    else:
+        exit()
+
+    for cfg_file in os.listdir(args.config_dir):
+        gin.parse_config_file(os.path.join(args.config_dir, cfg_file))
         train_envs = gym.vector.SyncVectorEnv(
             [make_env(gym_id, (seed * (i + 1)) ** 2, i, False, args.output_dir)
              for i in range(args.num_envs)])

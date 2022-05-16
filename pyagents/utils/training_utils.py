@@ -36,13 +36,11 @@ def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
                     episodes += 1
 
         loss_dict = agent.train(batch_size, update_rounds=update_rounds)
+        train_info['train_step'] = agent.train_step
         if episodes > 0:
             train_info['avg_return'] /= episodes
             train_info['avg_len'] /= episodes
-            train_info['train_step'] = agent.train_step
-            train_info = {**train_info, **loss_dict}
-        else:
-            train_info = loss_dict
+        train_info = {**train_info, **loss_dict}
         return s_t, train_info
 
     return train_step
@@ -77,13 +75,11 @@ def train_off_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
             for loss, value in epoch_info.items():
                 loss_dict[loss] += (value / update_rounds)
 
+        train_info['train_step'] = agent.train_step
         if episodes > 0:
             train_info['avg_return'] /= episodes
             train_info['avg_len'] /= episodes
-            train_info['train_step'] = agent.train_step
-            train_info = {**train_info, **loss_dict}
-        else:
-            train_info = loss_dict
+        train_info = {**train_info, **loss_dict}
         return s_t, train_info
 
     return train_step
@@ -106,6 +102,7 @@ def train_agent(agent, train_envs, test_env=None, training_steps=10 ** 5, batch_
     env_step = 0
     best_score = float('-inf')
     k = 0
+    avg_r, avg_l = 0, 0
 
     print(f'{"*" * 42}\nSTARTING TRAINING\n{"*" * 42}')
     with tqdm(total=training_steps) as pbar:
@@ -139,6 +136,13 @@ def train_agent(agent, train_envs, test_env=None, training_steps=10 ** 5, batch_
                 k += 1
                 info['test/score'] = avg_score
                 pbar.set_description(f'[EVAL SCORE: {avg_score:4.0f}] TRAINING')
+
+            if 'avg_return' in info:
+                avg_r = info['avg_return']
+                avg_l = info['avg_len']
+            else:
+                info['avg_return'] = avg_r
+                info['avg_len'] = avg_l
 
             pbar.update(update_rounds)
             pbar.set_postfix(**info)
