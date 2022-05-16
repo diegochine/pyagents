@@ -46,7 +46,7 @@ class GaussianPolicy(Policy):
         actions = tf.math.atanh((actions - self._act_means) / self._act_magnitudes)
         logprobs = tf.reduce_sum(gaussian.log_prob(actions), axis=-1)
         logprobs -= tf.reduce_sum((2. * (tf.math.log(2.) - actions - tf.math.softplus(-2. * actions))), axis=1)
-        return gaussian.log_prob(actions)
+        return logprobs
 
     def _distribution(self, obs):
         raise NotImplementedError()
