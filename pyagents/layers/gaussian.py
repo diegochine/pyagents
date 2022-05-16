@@ -14,7 +14,8 @@ class GaussianLayer(tf.keras.layers.Layer):
         self._act_means = tf.constant((ub + lb) / 2.0, shape=action_shape, dtype=dtype)
         self._act_magnitudes = tf.constant((ub - lb) / 2.0, shape=action_shape, dtype=dtype)
         self._mean_layer = tf.keras.layers.Dense(action_shape[0],  # assumes 1d action space
-                                                 kernel_initializer=tf.keras.initializers.Orthogonal(0.01))
+                                                 kernel_initializer=tf.keras.initializers.Orthogonal(0.01),
+                                                 activation='tanh')
         # initialize std dev variable(s)
         std_init = tfp.math.softplus_inverse(start_std - std_eps)
         self._std_dev = tf.Variable(initial_value=tf.fill(action_shape, std_init),
@@ -23,7 +24,7 @@ class GaussianLayer(tf.keras.layers.Layer):
         self._std_eps = std_eps
 
     def call(self, x, training=True):
-        mean = self._mean_layer(x)
+        mean = self._act_means + self._act_magnitudes * self._mean_layer(x)
         std_dev = tf.math.softplus(self._std_dev) + self._std_eps
         if self._action_shape == (1,):
             mean = tf.squeeze(mean, axis=1)
@@ -34,13 +35,9 @@ class GaussianLayer(tf.keras.layers.Layer):
             action = mean
         else:
             action = gaussian.sample()
+        logprobs = gaussian.log_prob(action)
         if self._action_shape == (1,):  # orribile
             action = action[..., tf.newaxis]
             mean = mean[..., tf.newaxis]
             std_dev = std_dev[..., tf.newaxis]
-
-        logprobs = tf.reduce_sum(gaussian.log_prob(action), axis=-1)
-        logprobs -= tf.reduce_sum((2. * (tf.math.log(2.) - action - tf.math.softplus(-2. * action))), axis=1)
-
-        action = self._act_means + self._act_magnitudes * tf.math.tanh(action)
         return action, (mean, std_dev), logprobs
