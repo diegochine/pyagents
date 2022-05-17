@@ -22,7 +22,7 @@ class GaussianPolicy(Policy):
         return False
 
     def _act(self, obs, deterministic=False, mask=None, training=True):
-        pi_out = self._policy_network(obs)
+        pi_out = self._policy_network(obs, training=training)
         action = pi_out.action.numpy()
         lp = pi_out.logprobs.numpy()
         return PolicyOutput(actions=action, logprobs=lp)

@@ -15,8 +15,7 @@ def get_optimizer(learning_rate=0.001):
 
 def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
     def train_step(agent, envs, s_t):
-        train_info = {'avg_return': 0, 'avg_len': 0}
-        episodes = 0
+        train_info = {'avg_return': [], 'avg_len': []}
         for _ in range(rollout_steps):
             agent_out = agent.act(s_t)
             a_t, lp_t = agent_out.actions, agent_out.logprobs
@@ -28,18 +27,19 @@ def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
                            done=done,
                            logprob=lp_t)
             s_t = s_tp1
-
             for single_step in info:
-                if "episode" in single_step.keys():
-                    train_info['avg_return'] += single_step['episode']['r']
-                    train_info['avg_len'] += single_step['episode']['l']
-                    episodes += 1
+                if "episode" in single_step:
+                    train_info['avg_return'].append(single_step['episode']['r'])
+                    train_info['avg_len'].append(single_step['episode']['l'])
 
         loss_dict = agent.train(batch_size, update_rounds=update_rounds)
         train_info['train_step'] = agent.train_step
-        if episodes > 0:
-            train_info['avg_return'] /= episodes
-            train_info['avg_len'] /= episodes
+        if train_info['avg_return']:
+            train_info['avg_return'] = np.mean(train_info['avg_return'])
+            train_info['avg_len'] = np.mean(train_info['avg_len'])
+        else:
+            train_info['avg_return'] = None
+            train_info['avg_len'] = None
         train_info = {**train_info, **loss_dict}
         return s_t, train_info
 
@@ -61,11 +61,11 @@ def train_off_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
                            done=done,
                            logprob=lp_t)
             s_t = s_tp1
-
             for single_step in info:
-                if "episode" in single_step.keys():
+                if "episode" in single_step:
                     train_info['avg_return'].append(single_step['episode']['r'])
                     train_info['avg_len'].append(single_step['episode']['l'])
+
 
         loss_dict = defaultdict(lambda: 0)  # keeps track of average losses
         for epoch in range(update_rounds):
@@ -155,7 +155,7 @@ def train_agent(agent, train_envs, test_env=None, training_steps=10 ** 5, batch_
     return agent, scores
 
 
-def test_agent(agent, envs, render=True):
+def test_agent(agent, envs, render=False):
     scores = []
     episode = 0
     n_episodes = envs.num_envs  # execute approximately 1 episode per env
