@@ -63,7 +63,7 @@ class QNetwork(Network):
             dtype=dtype
         )
         self._q_layer = QLayer(1, units=fc_params[-1], dropout=dropout_params, dueling=dueling, dtype=dtype)
-        self((tf.ones((1, *state_shape)), tf.ones(1, *action_shape)))
+        self((tf.ones((1, *state_shape)), tf.ones((1, *action_shape))))
 
     def call(self, inputs, training=False, mask=None):
         obs, action = inputs
