@@ -29,10 +29,10 @@ class OffPolicyAgent(Agent, ABC):
         if isinstance(buffer, Buffer):
             buffer.set_save_dir(self._save_dir)
             self._memory: Buffer = buffer
-        elif buffer == 'uniform':
+        elif buffer == 'uniform' or buffer is None:  # default
             self._memory: Buffer = UniformBuffer(save_dir=self._save_dir)
         elif buffer == 'prioritized':
-            self._memory: Buffer = PrioritizedBuffer(save_dir=save_dir)
+            self._memory: Buffer = PrioritizedBuffer(save_dir=self._save_dir)
         else:
             raise ValueError(f'unrecognized buffer param {buffer}')
 

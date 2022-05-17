@@ -2,7 +2,6 @@ import numpy as np
 import gin
 
 from pyagents.policies.policy import Policy, PolicyOutput
-from pyagents.utils import types
 
 
 @gin.configurable

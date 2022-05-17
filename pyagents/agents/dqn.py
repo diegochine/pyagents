@@ -11,8 +11,7 @@ from keras.losses import MeanSquaredError, Huber
 
 from pyagents.agents.agent import update_target
 from pyagents.agents.off_policy_agent import OffPolicyAgent
-from pyagents.utils import types
-from pyagents.memory import load_memories
+from pyagents.memory import Buffer, UniformBuffer, load_memories
 from pyagents.networks import DiscreteQNetwork
 from pyagents.policies import QPolicy, EpsGreedyPolicy, Policy
 from copy import deepcopy
@@ -27,16 +26,16 @@ class DQNAgent(OffPolicyAgent):
                  action_shape: tuple,
                  q_network: DiscreteQNetwork,
                  optimizer: tf.keras.optimizers.Optimizer = None,
-                 gamma: types.Float = 0.99,
-                 epsilon: types.Float = 0.1,
-                 epsilon_decay: types.Float = 0.99,
-                 epsilon_min: types.Float = 0.01,
+                 gamma: float = 0.99,
+                 epsilon: float = 0.1,
+                 epsilon_decay: float = 0.99,
+                 epsilon_min: float = 0.01,
                  target_update_period: int = 500,
-                 tau: types.Float = 1.0,
+                 tau: float = 1.0,
                  ddqn: bool = True,
                  buffer: Optional = 'uniform',
                  loss_fn: str = 'mse',
-                 gradient_clip_norm: Optional[types.Float] = 0.5,
+                 gradient_clip_norm: Optional[float] = 0.5,
                  log_dict: dict = None,
                  name: str = 'DQNAgent',
                  training: bool = True,

@@ -1,157 +1,18 @@
 import argparse
 import os
-import random
 
 import numpy as np
 import gym
 from argparse import ArgumentParser
 
-from pyagents.agents import DQNAgent, DistributionalDQNAgent, VPG, A2C, DDPG, PPO
-from pyagents.networks import DiscreteQNetwork, PolicyNetwork, ValueNetwork, SharedBackboneACNetwork, ACNetwork, \
-    DistributionalQNetwork
-from pyagents.memory import PrioritizedBuffer, UniformBuffer
 from pyagents.utils import train_agent
-import tensorflow as tf
-from tensorflow.keras.optimizers import Adam
 import gin
 
-from pyagents.utils.training_utils import test_agent, get_optimizer
-
-
-def load_agent(algo, path, ver):
-    if algo == 'dqn':
-        agent = DQNAgent.load(path, ver=ver, epsilon=0.00, training=False)
-    elif algo == 'vpg':
-        agent = VPG.load(path, ver=ver, training=False)
-    elif algo == 'a2c':
-        agent = A2C.load(path, ver=ver, training=False)
-    elif algo == 'ddpg':
-        agent = DDPG.load(path, ver=ver, training=False)
-    elif algo == 'ppo':
-        agent = PPO.load(path, ver=ver, training=False)
-    else:
-        raise ValueError(f'unsupported algorithm {algo}')
-    return agent
-
-
-@gin.configurable
-def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='uniform', scaling=None,
-              crit_start_learning_rate=None, schedule=True, wandb_params=None, gym_id=None, training_steps=10 ** 5):
-    if crit_start_learning_rate is None:
-        crit_start_learning_rate = act_start_learning_rate
-    if schedule:
-        act_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(act_start_learning_rate,
-                                                                          training_steps,
-                                                                          act_start_learning_rate / 1000)
-        crit_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(crit_start_learning_rate,
-                                                                           training_steps,
-                                                                           crit_start_learning_rate / 1000)
-    else:
-        act_learning_rate = act_start_learning_rate
-        crit_learning_rate = crit_start_learning_rate
-    if isinstance(env, gym.vector.VectorEnv):
-        state_shape = env.single_observation_space.shape
-        action_space = env.single_action_space
-    else:
-        state_shape = env.observation_space.shape
-        action_space = env.action_space
-    if wandb_params is not None:
-        wandb_params['group'] = gym_id
-    if algo == 'dqn':
-        assert isinstance(action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
-        action_shape = action_space.n
-        q_net = DiscreteQNetwork(state_shape, action_shape)
-        optim = Adam(learning_rate=act_learning_rate)
-        agent = DQNAgent(state_shape, action_shape, q_network=q_net, buffer=buffer, optimizer=optim,
-                         name='dqn', wandb_params=wandb_params, save_dir=output_dir,
-                         log_dict={'learning_rate': act_start_learning_rate})
-    elif algo == 'distributionaldqn':
-        assert isinstance(action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
-        action_shape = action_space.n
-        q_net = DistributionalQNetwork(state_shape, action_shape)
-        optim = Adam(learning_rate=act_learning_rate)
-        agent = DistributionalDQNAgent(state_shape, action_shape, q_net, buffer=buffer, optimizer=optim,
-                                       name='dqn', wandb_params=wandb_params, save_dir=output_dir,
-                                       log_dict={'learning_rate': act_start_learning_rate})
-    elif algo == 'vpg':
-        if isinstance(action_space, gym.spaces.Discrete):
-            action_shape = (action_space.n,)
-            output = 'softmax'
-            bounds = None
-        else:
-            action_shape = action_space.shape
-            output = 'gaussian'
-            bounds = (action_space.low, action_space.high)
-        a_net = PolicyNetwork(state_shape, action_shape, output=output, bounds=bounds)
-        v_net = ValueNetwork(state_shape)
-        a_opt = get_optimizer(learning_rate=act_learning_rate)
-        v_opt = get_optimizer(learning_rate=crit_learning_rate)
-        agent = VPG(state_shape, action_shape,
-                    actor=a_net, critic=v_net, actor_opt=a_opt, critic_opt=v_opt,
-                    name='vpg', wandb_params=wandb_params, save_dir=output_dir,
-                    log_dict={'actor_learning_rate': act_start_learning_rate,
-                              'critic_learning_rate': crit_start_learning_rate})
-    elif algo == 'ppo':
-        if isinstance(action_space, gym.spaces.Discrete):
-            action_shape = (action_space.n,)
-            output = 'softmax'
-            bounds = None
-        else:
-            action_shape = action_space.shape
-            output = 'gaussian'
-            bounds = (action_space.low, action_space.high)
-        a_net = PolicyNetwork(state_shape, action_shape, output=output, bounds=bounds)
-        v_net = ValueNetwork(state_shape)
-        a_opt = get_optimizer(learning_rate=act_learning_rate)
-        v_opt = get_optimizer(learning_rate=crit_learning_rate)
-        agent = PPO(state_shape, action_shape,
-                    actor=a_net, critic=v_net, actor_opt=a_opt, critic_opt=v_opt,
-                    name='ppo', wandb_params=wandb_params, save_dir=output_dir,
-                    log_dict={'actor_learning_rate': act_start_learning_rate,
-                              'critic_learning_rate': crit_start_learning_rate})
-    elif algo == 'a2c':
-        if isinstance(action_space, gym.spaces.Discrete):
-            action_shape = (action_space.n,)
-            output = 'softmax'
-            bounds = None
-        else:
-            action_shape = action_space.shape
-            output = 'beta'
-            bounds = (action_space.low, action_space.high)
-        ac_net = SharedBackboneACNetwork(state_shape, action_shape, output=output, bounds=bounds)
-        opt = get_optimizer(learning_rate=act_learning_rate)
-        agent = A2C(state_shape, action_shape, actor_critic=ac_net, opt=opt,
-                    name='a2c', wandb_params=wandb_params, save_dir=output_dir,
-                    log_dict={'learning_rate': act_start_learning_rate})
-    elif algo == 'ddpg':
-        assert isinstance(action_space, gym.spaces.Box), 'DDPG only works in continuous spaces'
-        action_shape = action_space.shape
-        bounds = (action_space.low, action_space.high)
-        buffer = PrioritizedBuffer() if buffer == 'prioritized' else UniformBuffer()
-        pi_params = {'bounds': bounds,
-                     'out_params': {'activation': 'tanh'}}
-        q_params = {}
-        ac = ACNetwork(state_shape=state_shape, action_shape=action_shape,
-                       pi_out='continuous', pi_params=pi_params, q_params=q_params)
-        a_opt = get_optimizer(learning_rate=act_learning_rate)
-        c_opt = get_optimizer(learning_rate=crit_learning_rate)
-        agent = DDPG(state_shape, action_shape, actor_critic=ac, buffer=buffer, actor_opt=a_opt, critic_opt=c_opt,
-                     action_bounds=bounds, name='ddpg', wandb_params=wandb_params, save_dir=output_dir,
-                     log_dict={'actor_learning_rate': act_start_learning_rate,
-                               'critic_learning_rate': crit_start_learning_rate})
-    else:
-        raise ValueError(f'unsupported algorithm {algo}')
-    return agent
-
-
-def reset_random_seed(seed):
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    tf.random.set_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
+from pyagents.utils.training_utils import test_agent, get_agent, load_agent
 
 
 def make_env(gym_id, seed, idx, capture_video, output_dir):
+    from pyagents.utils.training_utils import reset_random_seed
     reset_random_seed(seed)
 
     def thunk():
@@ -212,9 +73,10 @@ if __name__ == "__main__":
         gym_id = 'Pendulum-v1'
     else:
         raise ValueError(f'unsupported env {args.env}')
+
     if not args.output_dir:
         args.output_dir = f'output/{args.agent}-{gym_id.replace("/", "-")}'
-    reset_random_seed(args.seed)
+
     if args.test_ver is not None:
         agent = load_agent(args.agent, args.output_dir, args.test_ver)
         envs = gym.vector.SyncVectorEnv(
