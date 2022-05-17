@@ -68,8 +68,10 @@ class PolicyNetwork(Network):
                 dropout_params=dropout_params,
                 activation=activation,
             )
-        assert isinstance(bounds, tuple) or bounds is None, f'wrong bounds param: {bounds}'
-        if bounds is not None and isinstance(bounds[0], np.ndarray):
+        assert len(bounds) == 2 or bounds is None, f'wrong bounds param: {bounds}'
+        if bounds is not None:
+            if not isinstance(bounds, np.ndarray):
+                bounds = np.array(bounds, dtype=dtype.as_numpy_dtype if isinstance(dtype, tf.DType) else dtype)
             bounds = (tf.convert_to_tensor(bounds[0].squeeze()), tf.convert_to_tensor(bounds[1].squeeze()))
         self._bounds = bounds
         self._output_type = output

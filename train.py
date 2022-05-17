@@ -159,7 +159,7 @@ def make_env(gym_id, seed, idx, capture_video, output_dir):
         if capture_video and idx == 0:
             if not os.path.isdir(f"{output_dir}/videos"):
                 os.mkdir(f"{output_dir}/videos")
-            env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos", episode_trigger=lambda s: (s % 100) == 0)
+            env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos", episode_trigger=lambda s: (s % 2) == 0)
         env.seed(seed)
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
@@ -205,8 +205,12 @@ if __name__ == "__main__":
     reset_random_seed(args.seed)
     if args.test_ver is not None:
         agent = load_agent(args.agent, args.output_dir, args.test_ver)
-        env = make_env(gym_id, args.seed, 0, True, args.output_dir)()
-        scores = test_agent(agent, env, args.seed)
+        envs = gym.vector.SyncVectorEnv(
+            [make_env(gym_id, (args.seed * (3 * i)) ** 2, i, True, args.output_dir)
+             for i in range(100)])  # test for 100 runs
+        scores = test_agent(agent, envs, render=False)
+        avg_score = np.mean(scores)
+        print(f'AVG SCORE: {avg_score:4.0f}')
         exit()
 
     for cfg_file in os.listdir(args.config_dir):
