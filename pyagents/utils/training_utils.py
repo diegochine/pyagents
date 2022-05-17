@@ -119,6 +119,23 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
                             action_bounds=bounds, name='ddpg', wandb_params=wandb_params, save_dir=output_dir,
                             log_dict={'actor_learning_rate': act_start_learning_rate,
                                       'critic_learning_rate': crit_start_learning_rate})
+    elif algo == 'sac':
+        assert isinstance(action_space, gym.spaces.Box), 'sac only works in continuous spaces'
+        action_shape = action_space.shape
+        bounds = (action_space.low, action_space.high)
+
+        a_net = networks.PolicyNetwork(state_shape, action_shape, output='gaussian', bounds=bounds)
+        q_net = networks.QNetwork(state_shape=state_shape, action_shape=action_shape)
+        a_opt = get_optimizer(learning_rate=act_learning_rate)
+        c_opt = get_optimizer(learning_rate=crit_learning_rate)
+        alpha_opt = get_optimizer(learning_rate=act_start_learning_rate)
+
+        agent = agents.SAC(state_shape, action_shape, actor=a_net,
+                           critic=q_net, actor_opt=a_opt, critic_opt=c_opt,
+                           alpha_opt=alpha_opt, wandb_params=wandb_params, save_dir=output_dir,
+                           log_dict={'actor_learning_rate': act_start_learning_rate,
+                                     'critic_learning_rate': crit_start_learning_rate,
+                                     'alpha_learning_rate': act_start_learning_rate})
     else:
         raise ValueError(f'unsupported algorithm {algo}')
     return agent
@@ -293,6 +310,8 @@ def load_agent(algo, path, ver):
         agent = agents.DDPG.load(path, ver=ver, training=False)
     elif algo == 'ppo':
         agent = agents.PPO.load(path, ver=ver, training=False)
+    elif algo == 'sac':
+        agent = agents.SAC.load(path, ver=ver, training=False)
     else:
         raise ValueError(f'unsupported algorithm {algo}')
     return agent
