@@ -38,13 +38,15 @@ class SAC(OffPolicyAgent):
                  log_dict: dict = None,
                  name: str = 'A2C',
                  save_dir: str = './output',
-                 wandb_params: Optional[dict] = None):
+                 wandb_params: Optional[dict] = None,
+                 dtype: str = 'float32'):
         super(SAC, self).__init__(state_shape,
                                   action_shape,
                                   training=training,
                                   buffer=buffer,
                                   save_dir=save_dir,
-                                  name=name)
+                                  name=name,
+                                  dtype=dtype)
         if actor_opt is None or critic_opt is None or alpha_opt is None and training:
             raise ValueError('agent cannot be trained without optimizers')
 

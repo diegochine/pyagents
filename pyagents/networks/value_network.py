@@ -15,17 +15,18 @@ class ValueNetwork(Network):
                  conv_params=None,
                  fc_params=(64, 64),
                  dropout_params=None,
-                 activation='tanh',
-                 name='ValueNetwork',
-                 trainable=True,
-                 dtype=tf.float32):
+                 activation: str = 'tanh',
+                 name: str = 'ValueNetwork',
+                 trainable: bool = True,
+                 dtype: str = 'float32'):
         super(ValueNetwork, self).__init__(name, trainable, dtype)
         self._config = {'state_shape': state_shape,
                         'conv_params': conv_params if conv_params else [],
                         'fc_params': fc_params if fc_params else [],
                         'dropout_params': dropout_params if dropout_params else [],
                         'activation': activation,
-                        'name': name}
+                        'name': name,
+                        'dtype': dtype}
         if conv_params is None and fc_params is None:
             self._encoder = None
         else:
@@ -35,11 +36,13 @@ class ValueNetwork(Network):
                 fc_params=fc_params,
                 dropout_params=dropout_params,
                 activation=activation,
+                dtype=dtype
             )
         self._value_head = tf.keras.layers.Dense(1,
-                                                 kernel_initializer=tf.keras.initializers.Orthogonal(1.0))
-        self.build((None, state_shape))
+                                                 kernel_initializer=tf.keras.initializers.Orthogonal(1.0),
+                                                 dtype=dtype)
         self._denormalizer = None
+        self(tf.ones((1, *state_shape)))
 
     def get_config(self):
         config = super().get_config()

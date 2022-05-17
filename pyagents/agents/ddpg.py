@@ -35,7 +35,7 @@ class DDPG(OffPolicyAgent):
                  save_memories: bool = False,
                  name: str = 'DDPG',
                  wandb_params: Optional[dict] = None,
-                 dtype=tf.float32):
+                 dtype: str = 'float32'):
         """Creates a DDPG agent.
 
         Args:
@@ -67,7 +67,6 @@ class DDPG(OffPolicyAgent):
         self._ac_target = deepcopy(self._ac)
         self._actor_opt = actor_opt
         self._critic_opt = critic_opt
-        self._critic_loss_fn = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM_OVER_BATCH_SIZE)
 
         if policy is None:
             p = self._ac.get_policy()
@@ -109,12 +108,12 @@ class DDPG(OffPolicyAgent):
         if 'obs' in self.normalizers:
             states = self.normalize('obs', states)
             next_states = self.normalize('obs', next_states)
-        states_batch = tf.convert_to_tensor(states, dtype=tf.float32)
-        next_states_batch = tf.convert_to_tensor(next_states, dtype=tf.float32)
-        action_batch = tf.convert_to_tensor([sample[1] for sample in minibatch], dtype=tf.float32)
+        states_batch = tf.convert_to_tensor(states, dtype=self.dtype)
+        next_states_batch = tf.convert_to_tensor(next_states, dtype=self.dtype)
+        action_batch = tf.convert_to_tensor([sample[1] for sample in minibatch], dtype=self.dtype)
         reward_batch = tf.convert_to_tensor([sample[2] for sample in minibatch], dtype=tf.float32)
         reward_batch = tf.expand_dims(reward_batch, 1)  # shape must be (batch, 1)
-        done_batch = tf.cast(tf.convert_to_tensor([sample[4] for sample in minibatch]), tf.float32)
+        done_batch = tf.cast(tf.convert_to_tensor([sample[4] for sample in minibatch]), self.dtype)
         done_batch = tf.expand_dims(done_batch, 1)  # shape must be (batch, 1)
         return [states_batch, action_batch, reward_batch, next_states_batch, done_batch]
 
