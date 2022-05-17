@@ -16,7 +16,7 @@ class EncodingNetwork(Network):
                  dtype=tf.float32,
                  name='EncodingNetwork',
                  conv_type='2d'):
-        super().__init__(name=name)
+        super().__init__(name=name, dtype=dtype)
         self._state_shape = state_shape
 
         # TODO improve inizialization, allow initizializer to be passed as parameter
