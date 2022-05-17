@@ -30,7 +30,7 @@ class GaussianLayer(tf.keras.layers.Layer):
             mean = tf.squeeze(mean, axis=1)
             gaussian = tfp.distributions.Normal(loc=mean, scale=std_dev)
         else:
-            gaussian = tfp.distributions.MultivariateNormalDiag(loc=mean, scale=std_dev)
+            gaussian = tfp.distributions.MultivariateNormalDiag(loc=mean, scale_diag=std_dev)
         if not training or self._deterministic:
             action = mean
         else:
