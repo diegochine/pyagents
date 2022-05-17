@@ -84,6 +84,10 @@ class Agent(tf.Module, abc.ABC):
         return self._action_shape
 
     @property
+    def train_step(self) -> int:
+        return self._train_step
+
+    @property
     def config(self) -> dict:
         return self._config
 

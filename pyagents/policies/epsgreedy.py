@@ -28,7 +28,6 @@ class EpsGreedyPolicy(Policy):
     def entropy(self, output):
         raise NotImplementedError('method not exposed by eps greedy')
 
-
     @property
     def epsilon(self):
         return self._epsilon
