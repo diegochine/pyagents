@@ -45,15 +45,7 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
     if wandb_params is not None:
         wandb_params['group'] = gym_id
 
-    if algo == 'dqn':
-        assert isinstance(action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
-        action_shape = action_space.n
-        q_net = networks.DiscreteQNetwork(state_shape, action_shape)
-        optim = Adam(learning_rate=act_learning_rate)
-        agent = agents.DQNAgent(state_shape, action_shape, q_network=q_net, buffer=buffer, optimizer=optim,
-                                name='dqn', wandb_params=wandb_params, save_dir=output_dir,
-                                log_dict={'learning_rate': act_start_learning_rate})
-    elif algo == 'vpg':
+    if algo == 'vpg':
         if isinstance(action_space, gym.spaces.Discrete):
             action_shape = (action_space.n,)
             output = 'softmax'
@@ -103,6 +95,22 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
         agent = agents.A2C(state_shape, action_shape, actor_critic=ac_net, opt=opt,
                            name='a2c', wandb_params=wandb_params, save_dir=output_dir,
                            log_dict={'learning_rate': act_start_learning_rate})
+    elif algo == 'dqn':
+        assert isinstance(action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
+        action_shape = action_space.n
+        q_net = networks.DiscreteQNetwork(state_shape, action_shape)
+        optim = Adam(learning_rate=act_learning_rate)
+        agent = agents.DQNAgent(state_shape, action_shape, q_network=q_net, buffer=buffer, optimizer=optim,
+                                name='dqn', wandb_params=wandb_params, save_dir=output_dir,
+                                log_dict={'learning_rate': act_start_learning_rate})
+    elif algo == 'distributionaldqn':
+        assert isinstance(action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
+        action_shape = action_space.n
+        q_net = networks.DistributionalQNetwork(state_shape, action_shape)
+        optim = Adam(learning_rate=act_learning_rate)
+        agent = agents.DistributionalDQNAgent(state_shape, action_shape, q_net, buffer=buffer, optimizer=optim,
+                                              name='c51', wandb_params=wandb_params, save_dir=output_dir,
+                                              log_dict={'learning_rate': act_start_learning_rate})
     elif algo == 'ddpg':
         assert isinstance(action_space, gym.spaces.Box), 'DDPG only works in continuous spaces'
         action_shape = action_space.shape

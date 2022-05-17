@@ -68,7 +68,7 @@ class PolicyNetwork(Network):
                 dropout_params=dropout_params,
                 activation=activation,
             )
-        assert len(bounds) == 2 or bounds is None, f'wrong bounds param: {bounds}'
+        assert bounds is None or len(bounds) == 2, f'wrong bounds param: {bounds}'
         if bounds is not None:
             if not isinstance(bounds, np.ndarray):
                 bounds = np.array(bounds, dtype=dtype.as_numpy_dtype if isinstance(dtype, tf.DType) else dtype)

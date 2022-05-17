@@ -2,15 +2,12 @@ from typing import Optional, List, Dict
 import gin
 import numpy as np
 import tensorflow as tf
-import wandb
 from keras.losses import MeanSquaredError, Huber
 
-from pyagents.agents.agent import update_target
 from pyagents.agents.dqn import DQNAgent
-from pyagents.utils import json_utils, types
-from pyagents.memory import Buffer, UniformBuffer, load_memories
+from pyagents.memory import load_memories
 from pyagents.networks import DistributionalQNetwork
-from pyagents.policies import QPolicy, EpsGreedyPolicy, Policy
+from pyagents.policies import QPolicy, EpsGreedyPolicy
 from copy import deepcopy
 
 
@@ -26,16 +23,16 @@ class DistributionalDQNAgent(DQNAgent):
                  v_min: float = 0.0,
                  v_max: float = 200.0,
                  optimizer: tf.keras.optimizers.Optimizer = None,
-                 gamma: types.Float = 0.99,
-                 epsilon: types.Float = 0.1,
-                 epsilon_decay: types.Float = 0.99,
-                 epsilon_min: types.Float = 0.01,
+                 gamma: float = 0.99,
+                 epsilon: float = 0.1,
+                 epsilon_decay: float = 0.99,
+                 epsilon_min: float = 0.01,
                  target_update_period: int = 500,
-                 tau: types.Float = 1.0,
+                 tau: float = 1.0,
                  ddqn: bool = True,
                  buffer: Optional = 'uniform',
                  loss_fn: str = 'mse',
-                 gradient_clip_norm: Optional[types.Float] = 0.5,
+                 gradient_clip_norm: Optional[float] = 0.5,
                  log_dict: dict = None,
                  name: str = 'DQNAgent',
                  training: bool = True,

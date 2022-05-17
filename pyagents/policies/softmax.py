@@ -17,7 +17,7 @@ class SoftmaxPolicy(Policy):
 
     def _act(self, obs, mask=None, training=True) -> PolicyOutput:
         pi_out = self._policy_network(obs, training=training)
-        act = pi_out.action.numpy()
+        act = pi_out.actions.numpy()
         lp = pi_out.logprobs.numpy()
         return PolicyOutput(actions=act, logprobs=lp)
 
