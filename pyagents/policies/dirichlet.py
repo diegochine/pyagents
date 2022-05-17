@@ -3,7 +3,6 @@ import numpy as np
 import tensorflow_probability as tfp
 
 from pyagents.policies.policy import Policy
-from pyagents.utils import types
 
 
 @gin.configurable
@@ -13,7 +12,7 @@ class DirichletPolicy(Policy):
                  state_shape,
                  action_shape,
                  policy_network,
-                 scaling_factor: types.Float = 1.0,
+                 scaling_factor: float = 1.0,
                  bounds: tuple = (-np.inf, np.inf)):
         super().__init__(state_shape, action_shape)
         self._policy_network = policy_network

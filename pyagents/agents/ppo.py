@@ -6,7 +6,6 @@ import wandb
 from pyagents.agents.on_policy_agent import OnPolicyAgent
 from pyagents.networks import PolicyNetwork, ValueNetwork
 from pyagents.policies import Policy
-from pyagents.utils import types
 
 
 @gin.configurable
@@ -21,14 +20,14 @@ class PPO(OnPolicyAgent):
                  actor_opt: tf.keras.optimizers.Optimizer = None,
                  critic_opt: tf.keras.optimizers.Optimizer = None,
                  policy: Policy = None,
-                 gamma: types.Float = 0.99,
-                 clip_eps: types.Float = 0.2,
+                 gamma: float = 0.99,
+                 clip_eps: float = 0.2,
                  standardize: bool = True,
                  lam_gae: float = 0.9,
                  target_kl: float = 0.01,
                  returns_normalization: bool = True,
-                 critic_value_coef: types.Float = 0.5,
-                 entropy_coef: types.Float = 0,
+                 critic_value_coef: float = 0.5,
+                 entropy_coef: float = 0,
                  gradient_clip_norm: Optional[float] = 0.5,
                  training: bool = True,
                  save_dir: str = './output',

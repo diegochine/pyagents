@@ -9,7 +9,6 @@ from pyagents.agents.agent import update_target
 from pyagents.memory import Buffer, load_memories
 from pyagents.networks import ACNetwork
 from pyagents.policies import Policy, NormalNoisePolicy
-from pyagents.utils import types
 
 
 @gin.configurable
@@ -25,11 +24,11 @@ class DDPG(OffPolicyAgent):
                  policy: Policy = None,
                  buffer: Optional[Buffer] = None,
                  action_bounds: tuple = (-np.inf, np.inf),
-                 gamma: types.Float = 0.99,
-                 tau: types.Float = 0.9,
-                 stddev: types.Float = 0.2,
+                 gamma: float = 0.99,
+                 tau: float = 0.9,
+                 stddev: float = 0.2,
                  standardize: bool = True,
-                 gradient_clip_norm: Optional[types.Float] = 0.5,
+                 gradient_clip_norm: Optional[float] = 0.5,
                  training: bool = True,
                  log_dict: dict = None,
                  save_dir: str = './output',
