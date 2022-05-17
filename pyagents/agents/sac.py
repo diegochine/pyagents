@@ -40,7 +40,7 @@ class SAC(OffPolicyAgent):
                  name: str = 'SAC',
                  save_dir: str = './output',
                  wandb_params: Optional[dict] = None,
-                 dtype=tf.float32):
+                 dtype: str = 'float32'):
         super(SAC, self).__init__(state_shape,
                                   action_shape,
                                   training=training,

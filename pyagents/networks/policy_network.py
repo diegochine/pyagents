@@ -25,7 +25,7 @@ class PolicyNetwork(Network):
                  bounds: Optional[tuple] = None,
                  name: str = 'PolicyNetwork',
                  trainable: bool = True,
-                 dtype=tf.float32):
+                 dtype: str = 'float32'):
         """Creates a Policy Network.
 
         Args:
@@ -55,7 +55,8 @@ class PolicyNetwork(Network):
                         'activation': activation,
                         'output': output,
                         'out_params': out_params,
-                        'name': name}
+                        'name': name,
+                        'dtype': dtype}
         if out_params is None:
             out_params = {}
         if conv_params is None and fc_params is None:
@@ -87,6 +88,7 @@ class PolicyNetwork(Network):
             self._out_layer = SoftmaxLayer(features_shape, action_shape, **out_params)
         else:
             raise ValueError(f'unknown output type {output}')
+        self(tf.ones((1, *state_shape)))
 
     def get_policy(self, caller=None):
         """Returns a Policy object that represents the this network's current policy."""

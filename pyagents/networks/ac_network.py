@@ -19,14 +19,15 @@ class ACNetwork(Network):
                  pi_out='gaussian',
                  name='ACNetwork',
                  trainable=True,
-                 dtype=tf.float32):
+                 dtype: str = 'float32'):
         super(ACNetwork, self).__init__(name, trainable, dtype)
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
                         'pi_params': pi_params,
                         'q_params': q_params,
                         'pi_out': pi_out,
-                        'name': name}
+                        'name': name,
+                        'dtype': dtype}
         self._policy_net = PolicyNetwork(state_shape=state_shape,
                                          action_shape=action_shape,
                                          output=pi_out,

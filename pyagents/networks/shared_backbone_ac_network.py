@@ -23,7 +23,7 @@ class SharedBackboneACNetwork(Network):
                  bounds=None,
                  name='ActorCriticNetwork',
                  trainable=True,
-                 dtype=tf.float32):
+                 dtype: str = 'float32'):
         super(SharedBackboneACNetwork, self).__init__(name, trainable, dtype)
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
@@ -32,6 +32,7 @@ class SharedBackboneACNetwork(Network):
                         'dropout_params': dropout_params if dropout_params else [],
                         'activation': activation,
                         'name': name,
+                        'dtype': dtype,
                         'bounds': bounds,
                         'output': output}
         self._backbone = EncodingNetwork(

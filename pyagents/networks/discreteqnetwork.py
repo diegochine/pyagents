@@ -12,7 +12,7 @@ class DiscreteQNetwork(Network):
 
     def __init__(self, state_shape, action_shape,
                  conv_params=None, fc_params=(64, 64), dropout_params=None, activation='relu',
-                 name='QNetwork', trainable=True, dtype=tf.float32, dueling=True):
+                 name='QNetwork', trainable=True, dtype: str = 'float32', dueling=True):
         super().__init__(name=name, trainable=trainable, dtype=dtype)
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
@@ -21,16 +21,19 @@ class DiscreteQNetwork(Network):
                         'dropout_params': dropout_params if dropout_params else tuple(),
                         'activation': activation,
                         'dueling': dueling,
-                        'name': name}
+                        'name': name,
+                        'dtype': dtype}
         self._encoder = EncodingNetwork(
             state_shape,
             conv_params=conv_params,
             fc_params=fc_params[:-1],
             dropout_params=dropout_params,
             activation=activation,
-            name=name
+            name=name,
+            dtype=dtype
         )
-        self._q_layer = QLayer(action_shape, units=fc_params[-1], dropout=dropout_params, dueling=dueling)
+        self._q_layer = QLayer(action_shape, units=fc_params[-1], dropout=dropout_params, dueling=dueling, dtype=dtype)
+        self(tf.ones((1, *state_shape)))
 
     def call(self, inputs, training=False, mask=None):
         state = self._encoder(inputs, training=training)
