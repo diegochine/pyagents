@@ -99,7 +99,7 @@ class DistributionalDQNAgent(DQNAgent):
         })
         self._v_min = v_min
         self._v_max = v_max
-        self._support = tf.linspace(v_min, v_max, self._online_q_network.n_atoms)
+        self._support = tf.cast(tf.linspace(v_min, v_max, self._online_q_network.n_atoms), self.dtype)
         self._delta_z = (v_max - v_min) / (self._online_q_network.n_atoms - 1)
         self._online_q_network.set_support(self._support)
         self._target_q_network.set_support(self._support)
@@ -145,10 +145,8 @@ class DistributionalDQNAgent(DQNAgent):
 
         proj_dist, targets = self._project_dist(next_target_dist, reward_batch, done_batch)
 
-        # loss function reduces last axis, so we reshape to add a dummy one
         td_residuals = tf.nn.softmax_cross_entropy_with_logits(labels=tf.stop_gradient(proj_dist),
                                                                logits=preds_qvals_logits)
-        # td_residuals = self._td_errors_loss_fn(tf.expand_dims(preds_qvals_logits, -1), tf.expand_dims(target_q_values, -1))
         if weights is not None:  # weigh each sample by its weight before mean reduction
             td_residuals = weights * td_residuals
         loss = tf.reduce_mean(td_residuals)

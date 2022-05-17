@@ -19,6 +19,7 @@ class DistributionalQNetwork(Network):
                  dropout_params=None,
                  dueling=True,
                  noisy_layers=False,
+                 support=None,
                  activation='relu',
                  name='QNetwork',
                  trainable=True,
@@ -44,7 +45,8 @@ class DistributionalQNetwork(Network):
         )
         self._q_layer = QLayer(action_shape, units=fc_params[-1], dropout=dropout_params, dueling=dueling,
                                noisy_layers=noisy_layers, n_atoms=n_atoms)
-        self._support = None
+        self._support = support
+        self(tf.ones((1, *state_shape)))
 
     @property
     def noisy_layers(self):
@@ -56,6 +58,7 @@ class DistributionalQNetwork(Network):
 
     def set_support(self, support):
         self._support = support
+        self._config['support'] = support
 
     def reset_noise(self):
         """Noisy layers' noise reset"""
@@ -63,6 +66,7 @@ class DistributionalQNetwork(Network):
         self._q_layer.reset_noise()
 
     def call(self, inputs, training=False, mask=None):
+        assert self._support is not None, 'must first call set_support() method before forward of distributional qnet'
         state = self._encoder(inputs, training=training)
         qvals_logits = self._q_layer(state, training=training)
         # normalize returns distribution

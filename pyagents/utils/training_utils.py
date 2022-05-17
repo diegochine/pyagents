@@ -293,6 +293,8 @@ def test_agent(agent, envs, render=False):
 def load_agent(algo, path, ver):
     if algo == 'dqn':
         agent = agents.DQNAgent.load(path, ver=ver, epsilon=0.00, training=False)
+    elif algo == 'distributionaldqn':
+        agent = agents.DistributionalDQNAgent.load(path, ver=ver, training=False)
     elif algo == 'vpg':
         agent = agents.VPG.load(path, ver=ver, training=False)
     elif algo == 'a2c':

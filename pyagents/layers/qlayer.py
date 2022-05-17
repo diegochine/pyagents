@@ -18,7 +18,7 @@ class QLayer(tf.keras.layers.Layer):
                  **kwargs):
         super().__init__(name=name, **kwargs)
         if n_atoms is not None:
-            assert isinstance(n_atoms, int), f'distributional q layer need n_atoms to be int'
+            # assert isinstance(n_atoms, int), f'distributional q layer need n_atoms to be int'
             self.distributional = True
         else:
             self.distributional = False

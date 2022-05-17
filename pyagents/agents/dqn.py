@@ -75,7 +75,7 @@ class DQNAgent(OffPolicyAgent):
                                        dtype=dtype)
         if optimizer is None and training:
             raise ValueError('agent cannot be trained without optimizer')
-        assert isinstance(action_shape, int), 'current implementation only supports 1D discrete action spaces'
+        # assert isinstance(action_shape, int), 'current implementation only supports 1D discrete action spaces'
 
         self._gamma = gamma
         self._online_q_network = q_network
