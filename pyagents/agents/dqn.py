@@ -41,7 +41,7 @@ class DQNAgent(OffPolicyAgent):
                  training: bool = True,
                  save_dir: str = './output',
                  wandb_params: Optional[dict] = None,
-                 dtype=tf.float32):
+                 dtype: str = 'float32'):
         """Creates a DQN agent.
 
         Args:

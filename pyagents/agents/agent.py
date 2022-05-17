@@ -39,8 +39,8 @@ class Agent(tf.Module, abc.ABC):
                  save_dir: str = './output',
                  save_memories: bool = False,
                  log_gradients: bool = False,
-                 name='Agent',
-                 dtype=tf.float32):
+                 name: str = 'Agent',
+                 dtype: str = 'float32'):
         """Creates an Agent.
 
         Args:
@@ -62,7 +62,8 @@ class Agent(tf.Module, abc.ABC):
         self.is_logging = False
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
-                        'name': name}
+                        'name': name,
+                        'dtype': dtype}
         self._normalizers = dict()
         if normalize_obs:
             self.init_normalizer('obs', shape=self._state_shape)
@@ -396,8 +397,6 @@ class Agent(tf.Module, abc.ABC):
             net_weights = [net_weights_group[f'{net_name}_weights{i:0>3}'] for i in range(len(net_weights_group))]
             net_config['trainable'] = trainable
             net = net_class.from_config(net_config)
-            # FIXME choose another name like input_shape (safer) or let child assign weights
-            net(tf.ones((1, *net_config['state_shape'])))
             net.set_weights(net_weights)
             networks[net_name] = net
 

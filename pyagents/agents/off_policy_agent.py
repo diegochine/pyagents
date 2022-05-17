@@ -18,7 +18,7 @@ class OffPolicyAgent(Agent, ABC):
                  save_dir: str = './output',
                  save_memories: bool = False,
                  name='OffPolicyAgent',
-                 dtype=tf.float32):
+                 dtype: str = 'float32'):
         super(OffPolicyAgent, self).__init__(state_shape,
                                              action_shape,
                                              training,

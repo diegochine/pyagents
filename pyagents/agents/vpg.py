@@ -33,7 +33,8 @@ class VPG(OnPolicyAgent):
                  save_dir: str = './output',
                  log_dict: dict = None,
                  name: str = 'VPG',
-                 wandb_params: Optional[dict] = None):
+                 wandb_params: Optional[dict] = None,
+                 dtype: str = 'float32'):
         """Creates a VPG agent.
 
                 Args:
@@ -61,7 +62,8 @@ class VPG(OnPolicyAgent):
                     wandb_params: (Optional) Dict of parameters to enable WandB logging. Defaults to None.
                 """
         super(VPG, self).__init__(state_shape, action_shape, lam_gae=lam_gae,
-                                  training=training, save_dir=save_dir, name=name)
+                                  training=training, save_dir=save_dir, name=name,
+                                  dtype=dtype)
         if actor_opt is None and training:
             raise ValueError('agent cannot be trained without optimizer')
 

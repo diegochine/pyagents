@@ -31,7 +31,8 @@ class A2C(OnPolicyAgent):
                  name: str = 'A2C',
                  save_dir: str = './output',
                  save_memories: bool = False,
-                 wandb_params: Optional[dict] = None):
+                 wandb_params: Optional[dict] = None,
+                 dtype: str = 'float32'):
         """Creates an A2C agent.
 
         Args:
@@ -59,7 +60,8 @@ class A2C(OnPolicyAgent):
                                   training=training,
                                   save_dir=save_dir,
                                   save_memories=save_memories,
-                                  name=name)
+                                  name=name,
+                                  dtype=dtype)
         if opt is None and training:
             raise ValueError('agent cannot be trained without optimizer')
         self._actor_critic = actor_critic

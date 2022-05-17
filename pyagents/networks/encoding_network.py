@@ -15,12 +15,21 @@ class EncodingNetwork(Network):
                  dropout_params=None,
                  activation='tanh',
                  noisy_layers=False,
-                 dtype=tf.float32,
+                 dtype: str = 'float32',
                  name='EncodingNetwork',
                  conv_type='2d'):
-        super().__init__(name=name)
+        super().__init__(name=name, dtype=dtype)
         self._state_shape = state_shape
         self.noisy_layers = noisy_layers
+        self._config = {'state_shape': state_shape,
+                        'conv_params': conv_params if conv_params else tuple(),
+                        'fc_params': fc_params if conv_params else tuple(),
+                        'dropout_params': dropout_params if dropout_params else tuple(),
+                        'activation': activation,
+                        'name': name,
+                        'noisi_layers': noisy_layers,
+                        'dtype': dtype,
+                        'conv_type': conv_type}
 
         # TODO improve inizialization, allow initizializer to be passed as parameter
         kernel_initializer = tf.keras.initializers.Orthogonal(np.sqrt(2))
@@ -77,16 +86,7 @@ class EncodingNetwork(Network):
                     layers.append(tf.keras.layers.Dropout(rate=dropout))
 
         self._postprocessing_layers = layers
-        self.built = True  # Allow access to self.variables
-        self._config = {'state_shape': state_shape,
-                        'conv_params': conv_params if conv_params else tuple(),
-                        'fc_params': fc_params if conv_params else tuple(),
-                        'dropout_params': dropout_params if dropout_params else tuple(),
-                        'noisy_layers': noisy_layers,
-                        'activation': activation,
-                        'dtype': dtype,
-                        'name': name,
-                        'conv_type': conv_type}
+        self(tf.ones((1, *state_shape)))
 
     def call(self, inputs, training=False, mask=None):
         states = inputs

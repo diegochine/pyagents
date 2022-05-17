@@ -21,7 +21,7 @@ class DiscreteQNetwork(Network):
                  activation='relu',
                  name='QNetwork',
                  trainable=True,
-                 dtype=tf.float32):
+                 dtype: str = 'float32'):
         super().__init__(name=name, trainable=trainable, dtype=dtype)
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
@@ -31,7 +31,8 @@ class DiscreteQNetwork(Network):
                         'activation': activation,
                         'noisy_layers': noisy_layers,
                         'dueling': dueling,
-                        'name': name}
+                        'name': name,
+                        'dtype': dtype}
         self._encoder = EncodingNetwork(
             state_shape,
             conv_params=conv_params,
@@ -39,13 +40,16 @@ class DiscreteQNetwork(Network):
             dropout_params=dropout_params,
             noisy_layers=noisy_layers,
             activation=activation,
-            name=name
+            name=name,
+            dtype=dtype
         )
         self._q_layer = QLayer(action_shape,
                                units=fc_params[-1],
                                dropout=dropout_params,
                                dueling=dueling,
-                               noisy_layers=noisy_layers)
+                               noisy_layers=noisy_layers,
+                               dtype=dtype)
+        self(tf.ones((1, *state_shape)))
 
     @property
     def noisy_layers(self):
