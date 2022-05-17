@@ -9,7 +9,6 @@ from pyagents.agents.off_policy_agent import OffPolicyAgent
 from pyagents.memory import Buffer, UniformBuffer, load_memories
 from pyagents.networks import PolicyNetwork, DiscreteQNetwork
 from pyagents.policies import Policy
-from pyagents.utils import types
 
 
 @gin.configurable
@@ -27,14 +26,14 @@ class SAC(OffPolicyAgent):
                  critic2: Optional[DiscreteQNetwork] = None,
                  policy: Policy = None,
                  buffer: Optional[Buffer] = None,
-                 gamma: types.Float = 0.5,
+                 gamma: float = 0.5,
                  standardize: bool = True,
-                 actor_coef: types.Float = 1.0,
-                 critic_coef: types.Float = 0.5,
-                 entropy_coef: types.Float = 1.0,
-                 initial_log_alpha: types.Float = 0.0,
-                 target_entropy: Optional[types.Float] = None,
-                 gradient_clip_norm: Optional[types.Float] = 0.5,
+                 actor_coef: float = 1.0,
+                 critic_coef: float = 0.5,
+                 entropy_coef: float = 1.0,
+                 initial_log_alpha: float = 0.0,
+                 target_entropy: Optional[float] = None,
+                 gradient_clip_norm: Optional[float] = 0.5,
                  training: bool = True,
                  log_dict: dict = None,
                  name: str = 'A2C',

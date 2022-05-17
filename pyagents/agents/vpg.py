@@ -9,7 +9,6 @@ import wandb
 from pyagents.agents.on_policy_agent import OnPolicyAgent
 from pyagents.networks import PolicyNetwork, ValueNetwork
 from pyagents.policies import Policy
-from pyagents.utils import types
 
 
 @gin.configurable
@@ -24,11 +23,11 @@ class VPG(OnPolicyAgent):
                  critic: ValueNetwork = None,
                  critic_opt: tf.keras.optimizers.Optimizer = None,
                  policy: Policy = None,
-                 gamma: types.Float = 0.99,
+                 gamma: float = 0.99,
                  standardize: bool = True,
                  lam_gae: float = 0.9,
-                 critic_value_coef: types.Float = 0.5,
-                 entropy_coef: types.Float = 0,
+                 critic_value_coef: float = 0.5,
+                 entropy_coef: float = 0,
                  gradient_clip_norm: Optional[float] = None,
                  training: bool = True,
                  save_dir: str = './output',

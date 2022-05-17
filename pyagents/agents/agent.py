@@ -9,7 +9,7 @@ import tensorflow as tf
 import wandb
 
 from pyagents.policies import Policy
-from pyagents.utils import json_utils
+import pyagents.utils.json_utils as json_utils
 
 
 def update_target(source_vars, target_vars, tau=1.0):

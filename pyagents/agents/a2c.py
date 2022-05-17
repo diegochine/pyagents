@@ -8,7 +8,6 @@ import wandb
 from pyagents.agents.on_policy_agent import OnPolicyAgent
 from pyagents.networks import SharedBackboneACNetwork
 from pyagents.policies import Policy
-from pyagents.utils import types
 
 
 @gin.configurable
@@ -21,12 +20,12 @@ class A2C(OnPolicyAgent):
                  actor_critic: SharedBackboneACNetwork,
                  opt: tf.keras.optimizers.Optimizer = None,
                  policy: Policy = None,
-                 gamma: types.Float = 0.99,
+                 gamma: float = 0.99,
                  standardize: bool = True,
                  n_step_return: int = 1,
                  lam_gae: float = 0.9,
-                 entropy_coef: types.Float = 1e-3,
-                 gradient_clip_norm: Optional[types.Float] = 0.5,
+                 entropy_coef: float = 1e-3,
+                 gradient_clip_norm: Optional[float] = 0.5,
                  training: bool = True,
                  log_dict: dict = None,
                  name: str = 'A2C',
