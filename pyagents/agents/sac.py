@@ -137,7 +137,7 @@ class SAC(OffPolicyAgent):
         q1_loss = tf.reduce_mean(q1_td_loss)
         q2_td_loss = (q2 - targets) ** 2
         q2_loss = tf.reduce_mean(q2_td_loss)
-        return {'critic_loss': 0.5 * (q1_loss + q2_loss),
+        return {'critic_loss': (q1_loss + q2_loss),
                 'critic1_loss': q1_loss, 'critic2_loss': q2_loss,
                 'q1': q1, 'q2': q2, 'td_loss': tf.minimum(q1_td_loss, q2_td_loss)}
 
@@ -170,21 +170,16 @@ class SAC(OffPolicyAgent):
         targets = rewards + self.gamma * (1 - dones) * (
                 tf.minimum(q1_target, q2_target) - self.alpha * tf.expand_dims(act_out.logprobs, 1))
 
-        with tf.GradientTape(persistent=True) as q_tape:
+        with tf.GradientTape() as q_tape:
             critic_loss_info = self._loss_q(states, actions, tf.stop_gradient(targets))
-            critic1_loss, critic2_loss = critic_loss_info['critic1_loss'], critic_loss_info['critic2_loss']
-        assert not tf.math.is_inf(critic1_loss) and not tf.math.is_nan(critic1_loss) \
-               and not tf.math.is_inf(critic2_loss) and not tf.math.is_nan(critic2_loss)
-        critic1_grads = q_tape.gradient(critic1_loss, self._online_critic1.trainable_variables)
-        critic2_grads = q_tape.gradient(critic2_loss, self._online_critic2.trainable_variables)
+            critic_loss = critic_loss_info['critic_loss']
+        assert not tf.math.is_inf(critic_loss) and not tf.math.is_nan(critic_loss)
+        critic_vars = self._online_critic1.trainable_variables + self._online_critic2.trainable_variables
+        critic_grads = q_tape.gradient(critic_loss, critic_vars)
         if self._gradient_clip_norm is not None:
-            critic1_grads, critic1_norm = tf.clip_by_global_norm(critic1_grads, self._gradient_clip_norm)
-            critic2_grads, critic2_norm = tf.clip_by_global_norm(critic2_grads, self._gradient_clip_norm)
-        critic1_grads_and_vars = list(zip(critic1_grads, self._online_critic1.trainable_variables))
-        critic2_grads_and_vars = list(zip(critic2_grads, self._online_critic2.trainable_variables))
-        self._critic_opt.apply_gradients(critic1_grads_and_vars)
-        self._critic_opt.apply_gradients(critic2_grads_and_vars)
-        del q_tape
+            critic_grads, critic_norm = tf.clip_by_global_norm(critic_grads, self._gradient_clip_norm)
+        critic_grads_and_vars = list(zip(critic_grads, critic_vars))
+        self._critic_opt.apply_gradients(critic_grads_and_vars)
 
         with tf.GradientTape(persistent=True) as pi_tape:
             pi_loss_info = self._loss_pi(states)
@@ -211,24 +206,21 @@ class SAC(OffPolicyAgent):
                               tau=self.tau)
         self._train_step += 1
 
-        loss_dict = {'policy_loss': float(act_loss), 'critic_loss': float(critic_loss_info['critic_loss']),
-                     'critic1_loss': float(critic1_loss), 'critic2_loss': float(critic2_loss),
+        loss_dict = {'policy_loss': float(act_loss), 'critic_loss': float(critic_loss),
+                     'critic1_loss': float(critic_loss_info['critic1_loss']),
+                     'critic2_loss': float(critic_loss_info['critic2_loss']),
                      'alpha_loss': float(alpha_loss)}
         if self.is_logging:
             if self._log_gradients:
                 pi_grads_log = {f'actor/{".".join(var.name.split("/")[1:])}': grad.numpy()
                                 for grad, var in actor_grads_and_vars}
-                critic1_grads_log = {f'critic1/{".".join(var.name.split("/")[1:])}': grad.numpy()
-                                     for grad, var in critic1_grads_and_vars}
-                critic2_grads_log = {f'critic2/{".".join(var.name.split("/")[1:])}': grad.numpy()
-                                     for grad, var in critic2_grads_and_vars}
+                critic1_grads_log = {f'critic/{".".join(var.name.split("/")[1:])}': grad.numpy()
+                                     for grad, var in critic_grads_and_vars}
                 if self._gradient_clip_norm is not None:
                     pi_grads_log['actor/norm'] = actor_norm
-                    critic1_grads_log['critic1/norm'] = critic1_norm
-                    critic2_grads_log['critic2/norm'] = critic2_norm
-                self._log(do_log_step=False, prefix='gradients', **pi_grads_log, **critic1_grads_log,
-                          **critic2_grads_log)
-            state_values = tf.reduce_min(critic_loss_info['q1'], critic_loss_info['q2']).numpy()
+                    critic1_grads_log['critic/norm'] = critic_norm
+                self._log(do_log_step=False, prefix='gradients', **pi_grads_log, **critic1_grads_log)
+            state_values = tf.minimum(critic_loss_info['q1'], critic_loss_info['q2']).numpy()
             self._log(do_log_step=False, prefix='debug', state_values=state_values, td_targets=targets.numpy())
             self._log(do_log_step=True, **loss_dict, train_step=self._train_step)
         return loss_dict
