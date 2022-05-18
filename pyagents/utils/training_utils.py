@@ -124,7 +124,8 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
         action_shape = action_space.shape
         bounds = (action_space.low, action_space.high)
 
-        a_net = networks.PolicyNetwork(state_shape, action_shape, output='gaussian', bounds=bounds)
+        a_net = networks.PolicyNetwork(state_shape, action_shape, output='gaussian', bounds=bounds,
+                                       out_params={'state_dependent_std': True})
         q_net = networks.QNetwork(state_shape=state_shape, action_shape=action_shape)
         a_opt = get_optimizer(learning_rate=act_learning_rate)
         c_opt = get_optimizer(learning_rate=crit_learning_rate)

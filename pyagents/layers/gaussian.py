@@ -4,11 +4,12 @@ import tensorflow_probability as tfp
 
 class GaussianLayer(tf.keras.layers.Layer):
     def __init__(self, state_shape, action_shape, bounds, deterministic=False, start_std=0.5, std_eps=0.01,
-                 name='Gaussian', dtype=tf.float32, **kwargs):
+                 state_dependent_std=False, name='Gaussian', dtype=tf.float32, **kwargs):
         super(GaussianLayer, self).__init__(name=name, dtype=dtype, **kwargs)
         self._state_shape = state_shape
         self._action_shape = action_shape
         self._deterministic = deterministic
+        self._state_dependent_std = state_dependent_std
         # determine parameters for rescaling
         lb, ub = bounds
         self._act_means = tf.constant((ub + lb) / 2.0, shape=action_shape, dtype=dtype)
@@ -17,17 +18,26 @@ class GaussianLayer(tf.keras.layers.Layer):
                                                  kernel_initializer=tf.keras.initializers.Orthogonal(0.01),
                                                  activation='tanh')
         # initialize std dev variable(s)
-        std_init = tfp.math.softplus_inverse(start_std - std_eps)
-        self._std_dev = tf.Variable(initial_value=tf.fill(action_shape, std_init),
-                                    shape=self._action_shape,
-                                    trainable=True)
-        self._std_eps = std_eps
+        if self._state_dependent_std:
+            self._std_dev = tf.keras.layers.Dense(action_shape[0],
+                                                  # kernel_initializer=tf.keras.initializers.Orthogonal(0.01),
+                                                  activation=tf.math.softplus)
+        else:
+            std_init = tfp.math.softplus_inverse(start_std - std_eps)
+            self._std_dev = tf.Variable(initial_value=tf.fill(action_shape, std_init),
+                                        shape=self._action_shape,
+                                        trainable=True)
+            self._std_eps = std_eps
 
     def call(self, x, training=True):
         mean = self._act_means + self._act_magnitudes * self._mean_layer(x)
-        std_dev = tf.math.softplus(self._std_dev) + self._std_eps
+        if self._state_dependent_std:
+            std_dev = self._std_dev(x)
+        else:
+            std_dev = tf.math.softplus(self._std_dev) + self._std_eps
         if self._action_shape == (1,):
             mean = tf.squeeze(mean, axis=1)
+            std_dev = std_dev if not self._state_dependent_std else tf.squeeze(std_dev, axis=1)
             gaussian = tfp.distributions.Normal(loc=mean, scale=std_dev)
         else:
             gaussian = tfp.distributions.MultivariateNormalDiag(loc=mean, scale_diag=std_dev)
