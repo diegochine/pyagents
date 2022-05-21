@@ -7,7 +7,14 @@ from pyagents.memory.buffer import Buffer
 @gin.configurable
 class PrioritizedBuffer(Buffer):
 
-    def __init__(self, save_dir=None, size_short=5000, size_long=50000, ltmemory=None, eps=0.02, alpha=0.5, beta=0):
+    def __init__(self,
+                 save_dir=None,
+                 size_short=5000,
+                 size_long=50000,
+                 ltmemory=None,
+                 eps=0.02,
+                 alpha=0.5,
+                 beta=(0.0, 1.0, 10 ** 6)):
         super().__init__(save_dir)
         if ltmemory is not None:
             self.ltmemory = ltmemory
@@ -19,7 +26,7 @@ class PrioritizedBuffer(Buffer):
         self._max_p = 0
         self._eps = eps
         self._alpha = alpha
-        if isinstance(beta, int):
+        if isinstance(beta, (int, float)):
             self._beta = beta
             self._beta_max = beta
             self._beta_inc = 0
@@ -67,6 +74,7 @@ class PrioritizedBuffer(Buffer):
             self._beta = min(self._beta + self._beta_inc, self._beta_max)
         else:
             is_weights = np.ones_like(indexes)
+        self._beta = min(self._beta + self._beta_inc, self._beta_max)
         return vectorizing_fn(samples), indexes, is_weights
 
     def clear_ltmemory(self):
