@@ -116,6 +116,7 @@ class DQNAgent(OffPolicyAgent):
         wandb.define_metric('td_targets', step_metric="train_step", summary="max")
         wandb.define_metric('avg_state_values', step_metric="train_step", summary="max")
         wandb.define_metric('avg_td_target', step_metric="train_step", summary="max")
+        wandb.define_metric('epsilon_greedy', step_metric="train_step", summary="min")
 
     def _loss(self, memories, weights=None):
         state_batch, action_batch, reward_batch, next_state_batch, done_batch = memories
@@ -176,6 +177,9 @@ class DQNAgent(OffPolicyAgent):
         # decay epsilon of eps-greedy policy
         if isinstance(self._policy, EpsGreedyPolicy):
             self._policy.update_eps()
+            epsilon = self._policy.epsilon
+        else:
+            epsilon = 0
 
         # resets noisy layers noise parameters (if used)
         if self._online_q_network.noisy_layers:
@@ -196,7 +200,8 @@ class DQNAgent(OffPolicyAgent):
                       state_values=values_log,
                       td_targets=targets_log,
                       avg_state_value=np.mean(values_log),
-                      avg_td_target=np.mean(targets_log))
+                      avg_td_target=np.mean(targets_log),
+                      epsilon_greedy=epsilon)
             self._log(do_log_step=True, loss=float(loss), train_step=self._train_step)
 
         return {'loss': float(loss)}

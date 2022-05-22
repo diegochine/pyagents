@@ -103,14 +103,14 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
         agent = agents.DQNAgent(state_shape, action_shape, q_network=q_net, buffer=buffer, optimizer=optim,
                                 name='dqn', wandb_params=wandb_params, save_dir=output_dir,
                                 log_dict={'learning_rate': act_start_learning_rate})
-    elif algo == 'distributionaldqn':
+    elif algo == 'c51':
         assert isinstance(action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
         action_shape = action_space.n
         q_net = networks.DistributionalQNetwork(state_shape, action_shape)
         optim = Adam(learning_rate=act_learning_rate)
-        agent = agents.DistributionalDQNAgent(state_shape, action_shape, q_net, buffer=buffer, optimizer=optim,
-                                              name='c51', wandb_params=wandb_params, save_dir=output_dir,
-                                              log_dict={'learning_rate': act_start_learning_rate})
+        agent = agents.C51DQNAgent(state_shape, action_shape, q_net, buffer=buffer, optimizer=optim,
+                                   name='c51', wandb_params=wandb_params, save_dir=output_dir,
+                                   log_dict={'learning_rate': act_start_learning_rate})
     elif algo == 'ddpg':
         assert isinstance(action_space, gym.spaces.Box), 'DDPG only works in continuous spaces'
         action_shape = action_space.shape
@@ -293,8 +293,8 @@ def test_agent(agent, envs, render=False):
 def load_agent(algo, path, ver):
     if algo == 'dqn':
         agent = agents.DQNAgent.load(path, ver=ver, epsilon=0.00, training=False)
-    elif algo == 'distributionaldqn':
-        agent = agents.DistributionalDQNAgent.load(path, ver=ver, training=False)
+    elif algo == 'c51':
+        agent = agents.C51DQNAgent.load(path, ver=ver, training=False)
     elif algo == 'vpg':
         agent = agents.VPG.load(path, ver=ver, training=False)
     elif algo == 'a2c':

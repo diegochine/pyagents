@@ -87,13 +87,16 @@ if __name__ == "__main__":
         print(f'AVG SCORE: {avg_score:4.0f}')
         exit()
 
-    for cfg_file in os.listdir(args.config_dir):
+    listdir = os.listdir(args.config_dir)
+    listdir.sort()
+    for cfg_file in listdir:
         gin.parse_config_file(os.path.join(args.config_dir, cfg_file))
+        seeds = [(args.seed * (i + 101)) ** 2 for i in range(args.num_envs * 2)]
         train_envs = gym.vector.SyncVectorEnv(
-            [make_env(gym_id, (args.seed * (i + 101)) ** 2, i, False, args.output_dir)
+            [make_env(gym_id, seeds[i], i, False, args.output_dir)
              for i in range(args.num_envs)])
         test_envs = gym.vector.SyncVectorEnv(
-            [make_env(gym_id, (args.seed * (i + 8)) ** 2, i, args.video, args.output_dir)
+            [make_env(gym_id, seeds[i % (args.num_envs * 2)], i, args.video, args.output_dir)
              for i in range(100)])  # test for 100 runs
         agent = get_agent(args.agent, train_envs, output_dir=args.output_dir, gym_id=gym_id)
         agent, scores = train_agent(agent, train_envs, test_envs, output_dir=args.output_dir)

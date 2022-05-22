@@ -63,4 +63,7 @@ class UniformBuffer(Buffer):
 
     def sample(self, batch_size, vectorizing_fn=lambda x: x):
         # no need to return samples indexes, and is_weights contains all ones (as it's not used)
-        return vectorizing_fn(random.sample(list(self._ltmemory), batch_size)), [], np.ones(batch_size)
+        # compute samples, convert into tuple for retrocompatibily TODO switch to better dict interface
+        samples = random.sample(self._ltmemory, batch_size)
+        samples = list(map(lambda d: tuple(d.values()), samples))
+        return vectorizing_fn(samples), [], np.ones(batch_size)

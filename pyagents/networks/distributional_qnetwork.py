@@ -21,7 +21,7 @@ class DistributionalQNetwork(Network):
                  noisy_layers=False,
                  support=None,
                  activation='relu',
-                 name='QNetwork',
+                 name='DistributionalQNetwork',
                  trainable=True,
                  dtype=tf.float32):
         super().__init__(name=name, trainable=trainable, dtype=dtype)
@@ -46,7 +46,8 @@ class DistributionalQNetwork(Network):
         self._q_layer = QLayer(action_shape, units=fc_params[-1], dropout=dropout_params, dueling=dueling,
                                noisy_layers=noisy_layers, n_atoms=n_atoms)
         self._support = support
-        self(tf.ones((1, *state_shape)))
+        if support is not None:  # loading model
+            self(tf.ones((1, *state_shape)))
 
     @property
     def noisy_layers(self):

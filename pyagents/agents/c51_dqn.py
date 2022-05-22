@@ -2,6 +2,7 @@ from typing import Optional, List, Dict
 import gin
 import numpy as np
 import tensorflow as tf
+import wandb
 from keras.losses import MeanSquaredError, Huber
 
 from pyagents.agents.dqn import DQNAgent
@@ -12,8 +13,8 @@ from copy import deepcopy
 
 
 @gin.configurable
-class DistributionalDQNAgent(DQNAgent):
-    """An agent implementing a DQN algorithm based on distributional RL (https://arxiv.org/pdf/1707.06887.pdf).
+class C51DQNAgent(DQNAgent):
+    """An agent implementing a DQN algorithm based on the C51 algorithm (https://arxiv.org/pdf/1707.06887.pdf).
        Only supports Discrete action spaces."""
 
     def __init__(self,
@@ -31,14 +32,13 @@ class DistributionalDQNAgent(DQNAgent):
                  tau: float = 1.0,
                  ddqn: bool = True,
                  buffer: Optional = 'uniform',
-                 loss_fn: str = 'mse',
                  gradient_clip_norm: Optional[float] = 0.5,
                  log_dict: dict = None,
-                 name: str = 'DQNAgent',
+                 name: str = 'C51DQNAgent',
                  training: bool = True,
                  save_dir: str = './output',
                  wandb_params: Optional[dict] = None,
-                 dtype=tf.float32):
+                 dtype='float32'):
         """Creates a DQN agent.
 
         Args:
@@ -63,20 +63,20 @@ class DistributionalDQNAgent(DQNAgent):
               the norm does not exceed this value. Defaults to 0.5.
             log_dict: (Optional) additional logger parameters.
             """
-        super(DistributionalDQNAgent, self).__init__(state_shape,
-                                                     action_shape,
-                                                     q_network=q_network,
-                                                     optimizer=optimizer,
-                                                     gamma=gamma,
-                                                     epsilon=epsilon,
-                                                     epsilon_decay=epsilon_decay,
-                                                     epsilon_min=epsilon_min,
-                                                     target_update_period=target_update_period,
-                                                     training=training,
-                                                     buffer=buffer,
-                                                     save_dir=save_dir,
-                                                     name=name,
-                                                     dtype=dtype)
+        super(C51DQNAgent, self).__init__(state_shape,
+                                          action_shape,
+                                          q_network=q_network,
+                                          optimizer=optimizer,
+                                          gamma=gamma,
+                                          epsilon=epsilon,
+                                          epsilon_decay=epsilon_decay,
+                                          epsilon_min=epsilon_min,
+                                          target_update_period=target_update_period,
+                                          training=training,
+                                          buffer=buffer,
+                                          save_dir=save_dir,
+                                          name=name,
+                                          dtype=dtype)
         if optimizer is None and training:
             raise ValueError('agent cannot be trained without optimizer')
 
@@ -87,7 +87,6 @@ class DistributionalDQNAgent(DQNAgent):
         self._target_update_period = target_update_period
         self._tau = tau
         self._optimizer = optimizer
-        self._td_errors_loss_fn = MeanSquaredError(reduction='none') if loss_fn == 'mse' else Huber(reduction='none')
         self._train_step = 0
         self._ddqn = ddqn
         self._gradient_clip_norm = gradient_clip_norm
@@ -118,11 +117,6 @@ class DistributionalDQNAgent(DQNAgent):
 
     def _wandb_define_metrics(self):
         super()._wandb_define_metrics()
-        # wandb.define_metric('loss', step_metric="train_step", summary="min")
-        # wandb.define_metric('state_values', step_metric="train_step", summary="max")
-        # wandb.define_metric('td_targets', step_metric="train_step", summary="max")
-        # wandb.define_metric('avg_state_values', step_metric="train_step", summary="max")
-        # wandb.define_metric('avg_td_target', step_metric="train_step", summary="max")
 
     def _loss(self, memories, weights=None):
         state_batch, action_batch, reward_batch, next_state_batch, done_batch = memories
