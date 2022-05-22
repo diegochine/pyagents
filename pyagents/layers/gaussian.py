@@ -48,9 +48,9 @@ class GaussianLayer(tf.keras.layers.Layer):
             action = gaussian.sample()
         logprobs = gaussian.log_prob(action)
         if self._state_dependent_std:
-            action = self._act_means + self._act_magnitudes * tf.math.tanh(action)
             # logprobs = tf.reduce_sum(tf.expand_dims(logprobs, 1), axis=-1)
             logprobs -= tf.reduce_sum((2. * (tf.math.log(2.) - action - tf.math.softplus(-2. * action))), axis=-1)
+            action = self._act_means + self._act_magnitudes * tf.math.tanh(action)
 
         if self._action_shape == (1,):  # orribile
             action = action[..., tf.newaxis]
