@@ -18,22 +18,23 @@ class GaussianLayer(tf.keras.layers.Layer):
                                                  kernel_initializer=tf.keras.initializers.Orthogonal(0.01),
                                                  activation='tanh')
         # initialize std dev variable(s)
+        std_init = tfp.math.softplus_inverse(start_std - std_eps)
         if self._state_dependent_std:
             self._std_dev = tf.keras.layers.Dense(action_shape[0],
-                                                  # kernel_initializer=tf.keras.initializers.Orthogonal(0.01),
+                                                  kernel_initializer=tf.keras.initializers.Orthogonal(std_init),
                                                   activation=tf.math.softplus)
         else:
-            std_init = tfp.math.softplus_inverse(start_std - std_eps)
             self._std_dev = tf.Variable(initial_value=tf.fill(action_shape, std_init),
                                         shape=self._action_shape,
                                         trainable=True)
             self._std_eps = std_eps
 
     def call(self, x, training=True):
-        mean = self._act_means + self._act_magnitudes * self._mean_layer(x)
+        mean = self._mean_layer(x)
         if self._state_dependent_std:
             std_dev = self._std_dev(x)
         else:
+            mean = self._act_means + self._act_magnitudes * mean
             std_dev = tf.math.softplus(self._std_dev) + self._std_eps
         if self._action_shape == (1,):
             mean = tf.squeeze(mean, axis=1)
@@ -41,14 +42,16 @@ class GaussianLayer(tf.keras.layers.Layer):
             gaussian = tfp.distributions.Normal(loc=mean, scale=std_dev)
         else:
             gaussian = tfp.distributions.MultivariateNormalDiag(loc=mean, scale_diag=std_dev)
-        if not training or self._deterministic:
+        if not training and self._deterministic:
             action = mean
         else:
             action = gaussian.sample()
         logprobs = gaussian.log_prob(action)
         if self._state_dependent_std:
-            logprobs = tf.reduce_sum(tf.expand_dims(logprobs, 1), axis=-1)
+            action = self._act_means + self._act_magnitudes * tf.math.tanh(action)
+            # logprobs = tf.reduce_sum(tf.expand_dims(logprobs, 1), axis=-1)
             logprobs -= tf.reduce_sum((2. * (tf.math.log(2.) - action - tf.math.softplus(-2. * action))), axis=-1)
+
         if self._action_shape == (1,):  # orribile
             action = action[..., tf.newaxis]
             mean = mean[..., tf.newaxis]

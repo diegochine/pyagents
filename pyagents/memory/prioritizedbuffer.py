@@ -84,3 +84,4 @@ class PrioritizedBuffer(Buffer):
         assert errors.shape == indexes.shape
         for error_idx, mem_idx in enumerate(indexes):
             self.ltmemory[mem_idx][1] = errors[error_idx].numpy()
+            self._max_p = max(errors[error_idx].numpy(), self._max_p)

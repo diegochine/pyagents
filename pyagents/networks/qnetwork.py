@@ -12,7 +12,7 @@ class QNetwork(Network):
      and outputting Q(state, action) """
 
     def __init__(self, state_shape, action_shape,
-                 obs_conv_params=None, obs_fc_params=(64, 64), obs_dropout_params=None, obs_activation='relu',
+                 obs_conv_params=None, obs_fc_params=None, obs_dropout_params=None, obs_activation='relu',
                  act_fc_params=None, act_dropout_params=None, act_activation='relu',
                  fc_params=(64, 64), dropout_params=None, activation='relu',
                  name='QNetwork', trainable=True, dtype: str = 'float32', dueling=False):
@@ -22,26 +22,36 @@ class QNetwork(Network):
                         'dueling': dueling,
                         'name': name,
                         'dtype': dtype,
-                        'obs_conv_params': obs_conv_params if obs_conv_params else [],
-                        'obs_fc_params': obs_fc_params if obs_fc_params else [],
-                        'obs_dropout_params': obs_dropout_params if obs_dropout_params else [],
+                        'obs_conv_params': obs_conv_params,
+                        'obs_fc_params': obs_fc_params,
+                        'obs_dropout_params': obs_dropout_params,
                         'obs_activation': obs_activation,
-                        'act_fc_params': act_fc_params if act_fc_params else [],
-                        'act_dropout_params': act_dropout_params if act_dropout_params else [],
+                        'act_fc_params': act_fc_params,
+                        'act_dropout_params': act_dropout_params,
                         'act_activation': act_activation,
-                        'fc_params': fc_params if fc_params else [],
-                        'dropout_params': dropout_params if dropout_params else [],
+                        'fc_params': fc_params,
+                        'dropout_params': dropout_params,
                         'activation': activation}
-        self._obs_encoder = EncodingNetwork(
-            state_shape,
-            conv_params=obs_conv_params,
-            fc_params=obs_fc_params,
-            dropout_params=obs_dropout_params,
-            activation=obs_activation,
-            name="obs_encoder",
-            dtype=dtype
-        )
-        if act_fc_params is not None:
+
+        if obs_conv_params is None and obs_fc_params is None:
+            self._obs_encoder = None
+            shared_obs_input = state_shape[0]  # let's assume that if there's no encoding there's one-dim space
+        else:
+            self._obs_encoder = EncodingNetwork(
+                state_shape,
+                conv_params=obs_conv_params,
+                fc_params=obs_fc_params,
+                dropout_params=obs_dropout_params,
+                activation=obs_activation,
+                name="obs_encoder",
+                dtype=dtype
+            )
+            shared_obs_input = obs_fc_params[-1]
+
+        if act_fc_params is None:
+            self._act_encoder = None
+            shared_act_input = action_shape[0]  # let's assume that if there's no encoding there's one-dim space
+        else:
             self._act_encoder = EncodingNetwork(
                 action_shape,
                 conv_params=None,
@@ -50,11 +60,10 @@ class QNetwork(Network):
                 activation=act_activation,
                 name="act_encoder",
                 dtype=dtype)
-        else:
-            self._act_encoder = None
+            shared_act_input = act_fc_params[-1]
 
         self._shared_encoder = EncodingNetwork(
-            (obs_fc_params[-1] + (action_shape[0] if act_fc_params is None or len(act_fc_params) == 0 else act_fc_params[-1]),),
+            (shared_obs_input + shared_act_input, ),
             conv_params=None,
             fc_params=fc_params[:-1],
             dropout_params=dropout_params,
@@ -66,8 +75,9 @@ class QNetwork(Network):
         self((tf.ones((1, *state_shape)), tf.ones((1, *action_shape))))
 
     def call(self, inputs, training=False, mask=None):
-        obs, action = inputs
-        state = self._obs_encoder(obs, training=training)
+        state, action = inputs
+        if self._obs_encoder is not None:
+            state = self._obs_encoder(state, training=training)
         if self._act_encoder is not None:
             action = self._act_encoder(action, training=training)
         state_action = tf.concat([state, action], axis=1)

@@ -33,7 +33,8 @@ class SAC(OffPolicyAgent):
                  reward_normalization: bool = True,
                  target_update_period: int = 500,
                  tau: float = 1.0,
-                 initial_alpha: float = 1.0,
+                 initial_alpha: float = 0.2,
+                 train_alpha: bool = True,
                  target_entropy: Optional[float] = None,
                  gradient_clip_norm: Optional[float] = 0.5,
                  training: bool = True,
@@ -63,9 +64,10 @@ class SAC(OffPolicyAgent):
         self._critic_opt = critic_opt
 
         self._initial_alpha = initial_alpha
+        self.train_alpha = train_alpha
         self._log_alpha = tf.Variable(initial_value=tf.math.log(initial_alpha), trainable=True)
         self._alpha_opt = alpha_opt
-        if self._alpha_opt is None and self._actor_opt is not None:
+        if self.train_alpha and self._alpha_opt is None and self._actor_opt is not None:
             self._alpha_opt = Adam(learning_rate=self._actor_opt.learning_rate)
 
         if policy is None:
@@ -88,7 +90,8 @@ class SAC(OffPolicyAgent):
                             'reward_normalization': reward_normalization,
                             'gradient_clip_norm': self._gradient_clip_norm,
                             'target_entropy': self.target_entropy,
-                            'initial_alpha': self._initial_alpha})
+                            'initial_alpha': self._initial_alpha,
+                            'train_alpha': train_alpha})
 
         if wandb_params:
             self._init_logger(wandb_params,
@@ -111,7 +114,7 @@ class SAC(OffPolicyAgent):
         return tf.exp(tf.stop_gradient(self._log_alpha))
 
     def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool, *args, **kwargs) -> None:
-        reward = self.update_normalizer('reward', reward)
+        self.update_normalizer('reward', reward)
         super().remember(state, action, reward, next_state, done, *args, **kwargs)
 
     def _wandb_define_metrics(self):
@@ -131,6 +134,9 @@ class SAC(OffPolicyAgent):
         next_states_batch = tf.convert_to_tensor(next_states, dtype=self.dtype)
         action_batch = tf.convert_to_tensor([sample[1] for sample in minibatch], dtype=self.dtype)
         reward_batch = tf.convert_to_tensor([sample[2] for sample in minibatch], dtype=self.dtype)
+        if 'reward' in self.normalizers:
+            _, std_r = self.get_normalizer('reward')
+            reward_batch /= std_r
         reward_batch = tf.expand_dims(reward_batch, 1)  # shape must be (batch, 1)
         done_batch = tf.cast(tf.convert_to_tensor([sample[4] for sample in minibatch]), self.dtype)
         done_batch = tf.expand_dims(done_batch, 1)  # shape must be (batch, 1)
@@ -142,13 +148,14 @@ class SAC(OffPolicyAgent):
     def _loss_q(self, states, actions, targets) -> dict:
         q1 = self._online_critic1((states, actions)).critic_values
         q2 = self._online_critic2((states, actions)).critic_values
-        q1_td_loss = (q1 - targets) ** 2
+        q1_td_loss = tf.math.squared_difference(q1, targets)
         q1_loss = tf.reduce_mean(q1_td_loss)
-        q2_td_loss = (q2 - targets) ** 2
+        q2_td_loss = tf.math.squared_difference(q2, targets)
         q2_loss = tf.reduce_mean(q2_td_loss)
-        return {'critic_loss': (q1_loss + q2_loss) / 2.,
+        critic_loss = tf.reduce_mean(tf.stack([q1_td_loss, q2_td_loss], axis=1), axis=1)
+        return {'critic_loss': critic_loss,
                 'critic1_loss': q1_loss, 'critic2_loss': q2_loss,
-                'q1': q1, 'q2': q2, 'td_loss': tf.minimum(q1_td_loss, q2_td_loss)}
+                'q1': q1, 'q2': q2}
 
     def _loss_pi(self, states) -> dict:
         # alpha log pi - q due to gradient ascent
@@ -178,18 +185,25 @@ class SAC(OffPolicyAgent):
         targets = rewards + self.gamma * (1 - dones) * (
                 tf.minimum(q1_target, q2_target) - self.alpha * tf.expand_dims(act_out.logprobs, 1))
 
-        with tf.GradientTape() as q_tape:
-            critic_loss_info = self._loss_q(states, actions, tf.stop_gradient(targets))
-            critic_loss = critic_loss_info['critic_loss']
-        assert not tf.math.is_inf(critic_loss) and not tf.math.is_nan(critic_loss)
         critic_vars = self._online_critic1.trainable_variables + self._online_critic2.trainable_variables
+        with tf.GradientTape(watch_accessed_variables=False) as q_tape:
+            q_tape.watch(critic_vars)
+            critic_loss_info = self._loss_q(states, actions, tf.stop_gradient(targets))
+            critic_td_loss = critic_loss_info['critic_loss']
+            critic_loss = tf.reduce_mean(is_weights * critic_td_loss)
+        assert not tf.math.is_inf(critic_loss) and not tf.math.is_nan(critic_loss)
+
+        # use computed loss to update memories priorities (when using a prioritized buffer) TODO verify
+        self._memory.update_samples(tf.math.abs(tf.squeeze(critic_td_loss)), indexes)
+
         critic_grads = q_tape.gradient(critic_loss, critic_vars)
         if self._gradient_clip_norm is not None:
             critic_grads, critic_norm = tf.clip_by_global_norm(critic_grads, self._gradient_clip_norm)
         critic_grads_and_vars = list(zip(critic_grads, critic_vars))
         self._critic_opt.apply_gradients(critic_grads_and_vars)
 
-        with tf.GradientTape() as pi_tape:
+        with tf.GradientTape(watch_accessed_variables=False) as pi_tape:
+            pi_tape.watch(self._actor.trainable_variables)
             pi_loss_info = self._loss_pi(states)
             act_loss = pi_loss_info['act_loss']
         assert not tf.math.is_inf(act_loss) and not tf.math.is_nan(act_loss)
@@ -199,16 +213,16 @@ class SAC(OffPolicyAgent):
         actor_grads_and_vars = list(zip(actor_grads, self._actor.trainable_variables))
         self._actor_opt.apply_gradients(actor_grads_and_vars)
 
-        logprobs = pi_loss_info['logprobs']
-        with tf.GradientTape() as alpha_tape:
-            alpha_loss = - tf.reduce_mean(self._log_alpha * (tf.stop_gradient(logprobs) + self.target_entropy))
-        assert not tf.math.is_inf(alpha_loss) and not tf.math.is_nan(alpha_loss)
-        alpha_grads = alpha_tape.gradient(alpha_loss, [self._log_alpha])
-        alpha_grads_and_vars = list(zip(alpha_grads, [self._log_alpha]))
-        self._alpha_opt.apply_gradients(alpha_grads_and_vars)
+        if self.train_alpha:
+            logprobs = pi_loss_info['logprobs']
+            with tf.GradientTape(watch_accessed_variables=False) as alpha_tape:
+                alpha_tape.watch([self._log_alpha])
+                alpha_loss = - tf.reduce_mean(self._log_alpha * (tf.stop_gradient(logprobs) + self.target_entropy))
+            assert not tf.math.is_inf(alpha_loss) and not tf.math.is_nan(alpha_loss)
+            alpha_grads = alpha_tape.gradient(alpha_loss, [self._log_alpha])
+            alpha_grads_and_vars = list(zip(alpha_grads, [self._log_alpha]))
+            self._alpha_opt.apply_gradients(alpha_grads_and_vars)
 
-        # use computed loss to update memories priorities (when using a prioritized buffer) TODO verify
-        self._memory.update_samples(tf.math.abs(tf.squeeze(critic_loss_info['td_loss'])), indexes)
         if self._train_step % self.target_update_period == 0:
             for o, t in zip([self._online_critic1, self._online_critic2], [self._target_critic1, self._target_critic2]):
                 update_target(source_vars=o.variables,
@@ -218,8 +232,9 @@ class SAC(OffPolicyAgent):
 
         loss_dict = {'policy_loss': float(act_loss), 'critic_loss': float(critic_loss),
                      'critic1_loss': float(critic_loss_info['critic1_loss']),
-                     'critic2_loss': float(critic_loss_info['critic2_loss']),
-                     'alpha_loss': float(alpha_loss)}
+                     'critic2_loss': float(critic_loss_info['critic2_loss'])}
+        if self.train_alpha:
+            loss_dict['alpha_loss'] = float(alpha_loss)
         if self.is_logging:
             if self._log_gradients:
                 pi_grads_log = {f'actor/{".".join(var.name.split("/")[1:])}': grad.numpy()

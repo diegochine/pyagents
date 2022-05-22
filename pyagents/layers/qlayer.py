@@ -10,8 +10,8 @@ class QLayer(tf.keras.layers.Layer):
         self.action_shape = action_shape
         self.dueling = dueling
         self.dropout = bool(dropout is not None)
-        # hidden_initializer = tf.random_uniform_initializer(-0.1, 0.1)
-        # final_initializer = tf.random_uniform_initializer(-0.005, 0.005)
+        hidden_initializer = tf.keras.initializers.Orthogonal(0.01)
+        final_initializer = tf.keras.initializers.Orthogonal(0.005)
         if self.dueling:
             self._value_fc = tf.keras.layers.Dense(
                 units,
@@ -45,7 +45,7 @@ class QLayer(tf.keras.layers.Layer):
             self._dense = tf.keras.layers.Dense(
                 units,
                 activation='relu',
-                # kernel_initializer=hidden_initializer,
+                kernel_initializer=hidden_initializer,
                 bias_initializer=tf.constant_initializer(0.1)
             )
             if self.dropout:
@@ -53,7 +53,7 @@ class QLayer(tf.keras.layers.Layer):
             self._qvals = tf.keras.layers.Dense(
                 action_shape,
                 activation=None,
-                # kernel_initializer=final_initializer,
+                kernel_initializer=final_initializer,
                 bias_initializer=tf.constant_initializer(0.01)
             )
 
