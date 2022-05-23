@@ -15,6 +15,8 @@ class OffPolicyAgent(Agent, ABC):
                  action_shape: tuple,
                  training: bool,
                  buffer: Optional[Buffer] = None,
+                 normalize_obs: bool = True,
+                 reward_scaling: float = 1.0,
                  save_dir: str = './output',
                  save_memories: bool = False,
                  name='OffPolicyAgent',
@@ -22,6 +24,8 @@ class OffPolicyAgent(Agent, ABC):
         super(OffPolicyAgent, self).__init__(state_shape,
                                              action_shape,
                                              training,
+                                             normalize_obs=normalize_obs,
+                                             reward_scaling=reward_scaling,
                                              save_dir=save_dir,
                                              save_memories=save_memories,
                                              name=name,
@@ -60,6 +64,7 @@ class OffPolicyAgent(Agent, ABC):
 
     def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool, *args, **kwargs) -> None:
         """Saves piece of memory."""
+        reward = reward * self.reward_scaling
         self._memory.commit_stmemory((state, action, reward, next_state, done))
 
     @abc.abstractmethod

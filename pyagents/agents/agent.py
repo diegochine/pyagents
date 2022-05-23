@@ -36,6 +36,7 @@ class Agent(tf.Module, abc.ABC):
                  action_shape: tuple,
                  training: bool,
                  normalize_obs: bool = True,
+                 reward_scaling: float = 1.0,
                  save_dir: str = './output',
                  save_memories: bool = False,
                  log_gradients: bool = False,
@@ -60,9 +61,12 @@ class Agent(tf.Module, abc.ABC):
         self._wandb_run = None
         self._log_dict = None
         self.is_logging = False
+        self.reward_scaling = reward_scaling
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
                         'name': name,
+                        'normalize_obs': normalize_obs,
+                        'reward_scaling': reward_scaling,
                         'dtype': dtype}
         self._normalizers = dict()
         if normalize_obs:

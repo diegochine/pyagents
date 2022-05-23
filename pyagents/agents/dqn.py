@@ -36,6 +36,8 @@ class DQNAgent(OffPolicyAgent):
                  buffer: Optional = 'uniform',
                  loss_fn: str = 'mse',
                  gradient_clip_norm: Optional[float] = 0.5,
+                 normalize_obs: bool = True,
+                 reward_scaling: float = 1.0,
                  log_dict: dict = None,
                  name: str = 'DQNAgent',
                  training: bool = True,
@@ -61,6 +63,9 @@ class DQNAgent(OffPolicyAgent):
             tau: (Optional) tau for polyak-averaging of target network update. Defaults to 1.0.
             ddqn: (Optional) if True, uses Double DQN loss. Defaults to True.
             buffer: (Optional) buffer to store memories. Defaults to a uniform buffer.
+            normalize_obs: (Optional) if True, keeps track of running statistics to normalize observations.
+              Defaults to True.
+            reward_scaling: (Optional) scale factor applied to the reward. Defaults to 1.0.
             loss_fn: (Optional) loss function, either 'mse' or 'huber'. Defaults to 'mse'.
             gradient_clip_norm: (Optional) If provided, gradients are scaled so that
               the norm does not exceed this value. Defaults to 0.5.
@@ -68,6 +73,8 @@ class DQNAgent(OffPolicyAgent):
             """
         super(DQNAgent, self).__init__(state_shape,
                                        action_shape,
+                                       normalize_obs=normalize_obs,
+                                       reward_scaling=reward_scaling,
                                        training=training,
                                        buffer=buffer,
                                        save_dir=save_dir,

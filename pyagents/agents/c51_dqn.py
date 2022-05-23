@@ -21,7 +21,7 @@ class C51DQNAgent(DQNAgent):
                  state_shape: tuple,
                  action_shape: tuple,
                  q_network: C51QNetwork,
-                 v_min: float = 0.0,
+                 v_min: Optional[float] = None,
                  v_max: float = 200.0,
                  optimizer: tf.keras.optimizers.Optimizer = None,
                  gamma: float = 0.99,
@@ -33,18 +33,22 @@ class C51DQNAgent(DQNAgent):
                  ddqn: bool = True,
                  buffer: Optional = 'uniform',
                  gradient_clip_norm: Optional[float] = 0.5,
+                 normalize_obs: bool = True,
+                 reward_scaling: float = 1.0,
                  log_dict: dict = None,
                  name: str = 'C51DQNAgent',
                  training: bool = True,
                  save_dir: str = './output',
                  wandb_params: Optional[dict] = None,
                  dtype='float32'):
-        """Creates a DQN agent.
+        """Creates a C51 DQN agent. Number of atoms is taken from the network.
 
         Args:
             state_shape: Tuple representing the shape of the input space (observations).
             action_shape: Tuple representing the shape of the action space.
             q_network: network trained by the agent.
+            v_min: (Optional) minimum value of the return distribution. If None, defaults to -v_max.
+            v_max: maximum value of the return distribution.
             optimizer: tf optimizer used for training.
             gamma: (Optional) discount factor. Defaults to 0.99.
             epsilon: (Optional) starting epsilon value for eps-greedy policy. Not used when noisy=True.
@@ -58,6 +62,9 @@ class C51DQNAgent(DQNAgent):
             tau: (Optional) tau for polyak-averaging of target network update. Defaults to 1.0.
             ddqn: (Optional) if True, uses Double DQN loss. Defaults to True.
             buffer: (Optional) buffer to store memories. Defaults to a uniform buffer.
+            normalize_obs: (Optional) if True, keeps track of running statistics to normalize observations.
+              Defaults to True.
+            reward_scaling: (Optional) scale factor applied to the reward. Defaults to 1.0.
             loss_fn: (Optional) loss function, either 'mse' or 'huber'. Defaults to 'mse'.
             gradient_clip_norm: (Optional) If provided, gradients are scaled so that
               the norm does not exceed this value. Defaults to 0.5.
@@ -72,6 +79,8 @@ class C51DQNAgent(DQNAgent):
                                           epsilon_decay=epsilon_decay,
                                           epsilon_min=epsilon_min,
                                           target_update_period=target_update_period,
+                                          normalize_obs=normalize_obs,
+                                          reward_scaling=reward_scaling,
                                           training=training,
                                           buffer=buffer,
                                           save_dir=save_dir,
@@ -96,6 +105,8 @@ class C51DQNAgent(DQNAgent):
             'v_min': v_min,
             'v_max': v_max,
         })
+        if v_min is None:
+            v_min = -v_max
         self._v_min = v_min
         self._v_max = v_max
         self._support = tf.cast(tf.linspace(v_min, v_max, self._online_q_network.n_atoms), self.dtype)
