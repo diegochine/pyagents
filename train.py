@@ -27,7 +27,7 @@ def make_env(gym_id, seed, idx, capture_video, output_dir):
         if capture_video and idx == 0:
             if not os.path.isdir(f"{output_dir}/videos"):
                 os.mkdir(f"{output_dir}/videos")
-            env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos", episode_trigger=lambda s: (s % 2) == 0)
+            env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos", episode_trigger=lambda s: (s % 5) == 0)
         env.seed(seed)
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
@@ -66,6 +66,10 @@ if __name__ == "__main__":
         gym_id = 'LunarLander-v2'
     elif args.env.startswith('p'):
         gym_id = 'Pendulum-v1'
+    elif args.env.startswith('wa'):
+        gym_id = 'Walker2d-v2'
+    elif args.env.startswith('ha'):
+        gym_id = 'HalfCheetah-v3'
     else:
         raise ValueError(f'unsupported env {args.env}')
 

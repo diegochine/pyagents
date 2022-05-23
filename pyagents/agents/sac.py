@@ -31,9 +31,10 @@ class SAC(OffPolicyAgent):
                  gamma: float = 0.99,
                  standardize: bool = True,
                  reward_normalization: bool = True,
+                 reward_scale: float = 1.,
                  target_update_period: int = 500,
                  tau: float = 1.0,
-                 initial_alpha: float = 0.2,
+                 initial_alpha: float = 1.,
                  train_alpha: bool = True,
                  target_entropy: Optional[float] = None,
                  gradient_clip_norm: Optional[float] = 0.5,
@@ -82,7 +83,7 @@ class SAC(OffPolicyAgent):
         self.target_entropy = target_entropy if target_entropy else -np.prod(self.action_shape) / 2.0
         if reward_normalization:
             self.init_normalizer('reward', (1,))
-
+        self.reward_scale = reward_scale
         self.config.update({'gamma': self.gamma,
                             'tau': self.tau,
                             'target_update_period': self.target_update_period,
@@ -91,7 +92,8 @@ class SAC(OffPolicyAgent):
                             'gradient_clip_norm': self._gradient_clip_norm,
                             'target_entropy': self.target_entropy,
                             'initial_alpha': self._initial_alpha,
-                            'train_alpha': train_alpha})
+                            'train_alpha': train_alpha,
+                            'reward_scale': reward_scale})
 
         if wandb_params:
             self._init_logger(wandb_params,
@@ -114,7 +116,8 @@ class SAC(OffPolicyAgent):
         return tf.exp(tf.stop_gradient(self._log_alpha))
 
     def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool, *args, **kwargs) -> None:
-        self.update_normalizer('reward', reward)
+        if 'reward' in self.normalizers:
+            self.update_normalizer('reward', reward)
         super().remember(state, action, reward, next_state, done, *args, **kwargs)
 
     def _wandb_define_metrics(self):
@@ -182,7 +185,7 @@ class SAC(OffPolicyAgent):
         next_action = act_out.action
         q1_target = self._target_critic1((next_states, next_action)).critic_values
         q2_target = self._target_critic2((next_states, next_action)).critic_values
-        targets = rewards + self.gamma * (1 - dones) * (
+        targets = self.reward_scale * rewards + self.gamma * (1 - dones) * (
                 tf.minimum(q1_target, q2_target) - self.alpha * tf.expand_dims(act_out.logprobs, 1))
 
         critic_vars = self._online_critic1.trainable_variables + self._online_critic2.trainable_variables
@@ -217,9 +220,11 @@ class SAC(OffPolicyAgent):
             logprobs = pi_loss_info['logprobs']
             with tf.GradientTape(watch_accessed_variables=False) as alpha_tape:
                 alpha_tape.watch([self._log_alpha])
-                alpha_loss = - tf.reduce_mean(self._log_alpha * (tf.stop_gradient(logprobs) + self.target_entropy))
+                alpha_loss = tf.reduce_mean(self._log_alpha * (tf.stop_gradient(- logprobs - self.target_entropy)))
             assert not tf.math.is_inf(alpha_loss) and not tf.math.is_nan(alpha_loss)
             alpha_grads = alpha_tape.gradient(alpha_loss, [self._log_alpha])
+            if self._gradient_clip_norm is not None:
+                alpha_grads, _ = tf.clip_by_global_norm(alpha_grads, self._gradient_clip_norm)
             alpha_grads_and_vars = list(zip(alpha_grads, [self._log_alpha]))
             self._alpha_opt.apply_gradients(alpha_grads_and_vars)
 
