@@ -106,11 +106,20 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
     elif algo == 'c51':
         assert isinstance(action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
         action_shape = action_space.n
-        q_net = networks.DistributionalQNetwork(state_shape, action_shape)
+        q_net = networks.C51QNetwork(state_shape, action_shape)
         optim = Adam(learning_rate=act_learning_rate)
         agent = agents.C51DQNAgent(state_shape, action_shape, q_net, buffer=buffer, optimizer=optim,
                                    name='c51', wandb_params=wandb_params, save_dir=output_dir,
                                    log_dict={'learning_rate': act_start_learning_rate})
+    elif algo == 'qrdqn':
+        assert isinstance(action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
+        action_shape = action_space.n
+        q_net = networks.QRQNetwork(state_shape, action_shape)
+        optim = Adam(learning_rate=act_learning_rate, epsilon=0.01/32)
+        agent = agents.QRDQNAgent(state_shape, action_shape, q_net, buffer=buffer, optimizer=optim,
+                                  name='qrdqn', wandb_params=wandb_params, save_dir=output_dir,
+                                  log_dict={'learning_rate': act_start_learning_rate})
+
     elif algo == 'ddpg':
         assert isinstance(action_space, gym.spaces.Box), 'DDPG only works in continuous spaces'
         action_shape = action_space.shape
@@ -303,6 +312,8 @@ def load_agent(algo, path, ver):
         agent = agents.DDPG.load(path, ver=ver, training=False)
     elif algo == 'ppo':
         agent = agents.PPO.load(path, ver=ver, training=False)
+    elif algo == 'qrdn':
+        agent = agents.QRDQNAgent.load(path, ver=ver, training=False)
     else:
         raise ValueError(f'unsupported algorithm {algo}')
     return agent

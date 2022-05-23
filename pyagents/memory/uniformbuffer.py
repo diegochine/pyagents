@@ -41,7 +41,7 @@ class UniformBuffer(Buffer):
                 a_t = self._stmemory[0]['actions'][b]
                 r_tpn = 0
                 for k, e_k in enumerate(self._stmemory):
-                    r_tpn += (gamma ** k) * e_k['rewards'][b]
+                    r_tpn += (gamma ** (k + 1)) * e_k['rewards'][b]
                     if e_k['dones'][b]:
                         break
                 s_tpn = e_k['next_states']

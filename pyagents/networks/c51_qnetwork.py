@@ -8,7 +8,7 @@ from pyagents.networks.encoding_network import EncodingNetwork
 
 
 @gin.configurable
-class DistributionalQNetwork(Network):
+class C51QNetwork(Network):
     """A DQN for discrete action spaces, taking in input a state and outputting [Q(s, a_1), ..., Q(s, a_n)]"""
 
     def __init__(self, state_shape,
@@ -21,7 +21,7 @@ class DistributionalQNetwork(Network):
                  noisy_layers=False,
                  support=None,
                  activation='relu',
-                 name='DistributionalQNetwork',
+                 name='QRQNetwork',
                  trainable=True,
                  dtype=tf.float32):
         super().__init__(name=name, trainable=trainable, dtype=dtype)
@@ -44,7 +44,7 @@ class DistributionalQNetwork(Network):
             name=name
         )
         self._q_layer = QLayer(action_shape, units=fc_params[-1], dropout=dropout_params, dueling=dueling,
-                               noisy_layers=noisy_layers, n_atoms=n_atoms)
+                               noisy_layers=noisy_layers, n=n_atoms)
         self._support = support
         if support is not None:  # loading model
             self(tf.ones((1, *state_shape)))

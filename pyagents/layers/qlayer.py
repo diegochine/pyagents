@@ -13,17 +13,17 @@ class QLayer(tf.keras.layers.Layer):
                  dropout=None,
                  dueling=True,
                  noisy_layers=False,
-                 n_atoms=None,
+                 n=None,
                  name='qlayer',
                  **kwargs):
         super().__init__(name=name, **kwargs)
-        if n_atoms is not None:
-            # assert isinstance(n_atoms, int), f'distributional q layer need n_atoms to be int'
+        if n is not None:  # either number of atoms (c51) or number of quantiles (qr dqn)
+            # assert isinstance(n, int), f'distributional q layer need n to be int'
             self.distributional = True
         else:
             self.distributional = False
-            n_atoms = 1
-        self.n_atoms = n_atoms
+            n = 1
+        self.n = n
         if noisy_layers:
             fc_layer = NoisyLayer
         else:
@@ -44,7 +44,7 @@ class QLayer(tf.keras.layers.Layer):
             if self.dropout:
                 self._value_dropout = tf.keras.layers.Dropout(rate=dropout)
             self._value_head = fc_layer(
-                n_atoms,
+                n,
                 activation=None,
                 # kernel_initializer=final_initializer,
                 # bias_initializer=tf.constant_initializer(0.1)
@@ -58,7 +58,7 @@ class QLayer(tf.keras.layers.Layer):
             if self.dropout:
                 self._adv_dropout = tf.keras.layers.Dropout(rate=dropout)
             self._adv_head = fc_layer(
-                n_atoms * action_shape,
+                n * action_shape,
                 activation=None,
                 # kernel_initializer=final_initializer,
                 # bias_initializer=tf.constant_initializer(0.1)
@@ -73,7 +73,7 @@ class QLayer(tf.keras.layers.Layer):
             if self.dropout:
                 self._dropout = tf.keras.layers.Dropout(rate=dropout)
             self._qvals = fc_layer(
-                n_atoms * action_shape,
+                n * action_shape,
                 activation=None,
                 # kernel_initializer=final_initializer,
                 # bias_initializer=tf.constant_initializer(0.01)
@@ -90,21 +90,22 @@ class QLayer(tf.keras.layers.Layer):
                 advals = self._adv_dropout(advals, training=training)
             advals = self._adv_head(advals)
             if self.distributional:
-                svals = tf.reshape(svals, (-1, 1, self.n_atoms))
-                advals = tf.reshape(advals, (-1, self.action_shape, self.n_atoms))
+                svals = tf.reshape(svals, (-1, 1, self.n))
+                advals = tf.reshape(advals, (-1, self.action_shape, self.n))
             qvals = svals + (advals - tf.reduce_mean(advals, axis=1, keepdims=True))
-            return qvals  # returns logits, not normalized probabilities
+            return qvals
         else:
             x = self._dense(inputs)
             if self.dropout:
                 x = self._dropout(x, training=training)
-            raise NotImplementedError
-            return self._qvals(x)
+            qvals = tf.reshape(self._qvals(x), (-1, self.action_shape, self.n))
+            return qvals
 
     def reset_noise(self):
         """Resets noise of noisy layers"""
-        if self.dueling:
-            self._adv_fc.reset_noise()
-            self._value_fc.reset_noise()
-        else:
-            self._dense.reset_noise()
+        if self.noisy_layers:
+            if self.dueling:
+                self._adv_fc.reset_noise()
+                self._value_fc.reset_noise()
+            else:
+                self._dense.reset_noise()

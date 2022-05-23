@@ -1,6 +1,5 @@
 import numpy as np
 import gin
-from collections import deque
 
 from pyagents.memory.uniformbuffer import UniformBuffer
 from pyagents.memory.sum_tree import SumTree
