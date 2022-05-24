@@ -23,6 +23,7 @@ def make_env(gym_id, seed, idx, capture_video, output_dir):
             env_args = dict(full_action_space=False,  # reduced action space for easier learning
                             )
         env = gym.make(gym_id, **env_args)
+        env = gym.wrappers.TimeLimit(env)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         if capture_video and idx == 0:
             if not os.path.isdir(f"{output_dir}/videos"):
