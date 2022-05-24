@@ -28,7 +28,7 @@ class EncodingNetwork(Network):
                         'conv_type': conv_type}
 
         # TODO improve inizialization, allow initizializer to be passed as parameter
-        kernel_initializer = tf.keras.initializers.Orthogonal(np.sqrt(2))
+        kernel_initializer = tf.keras.initializers.Orthogonal(0.1)
 
         layers = []
 

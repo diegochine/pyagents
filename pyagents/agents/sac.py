@@ -125,7 +125,7 @@ class SAC(OffPolicyAgent):
         wandb.define_metric('critic_loss', step_metric="train_step", summary="min")
         wandb.define_metric('critic1_loss', step_metric="train_step", summary="min")
         wandb.define_metric('critic2_loss', step_metric="train_step", summary="min")
-        wandb.define_metric('entropy_loss', step_metric="train_step", summary="min")
+        wandb.define_metric('alpha_loss', step_metric="train_step", summary="min")
 
     def _minibatch_to_tf(self, minibatch):
         states = np.array([sample[0].reshape(self.state_shape) for sample in minibatch])
@@ -155,7 +155,7 @@ class SAC(OffPolicyAgent):
         q1_loss = tf.reduce_mean(q1_td_loss)
         q2_td_loss = tf.math.squared_difference(q2, targets)
         q2_loss = tf.reduce_mean(q2_td_loss)
-        critic_loss = tf.reduce_mean(tf.stack([q1_td_loss, q2_td_loss], axis=1), axis=1)
+        critic_loss = 0.5 * (q1_td_loss + q2_td_loss)
         return {'critic_loss': critic_loss,
                 'critic1_loss': q1_loss, 'critic2_loss': q2_loss,
                 'q1': q1, 'q2': q2}
@@ -220,7 +220,7 @@ class SAC(OffPolicyAgent):
             logprobs = pi_loss_info['logprobs']
             with tf.GradientTape(watch_accessed_variables=False) as alpha_tape:
                 alpha_tape.watch([self._log_alpha])
-                alpha_loss = tf.reduce_mean(self._log_alpha * (tf.stop_gradient(- logprobs - self.target_entropy)))
+                alpha_loss = tf.reduce_mean(- tf.exp(self._log_alpha) * (tf.stop_gradient(logprobs + self.target_entropy)))
             assert not tf.math.is_inf(alpha_loss) and not tf.math.is_nan(alpha_loss)
             alpha_grads = alpha_tape.gradient(alpha_loss, [self._log_alpha])
             if self._gradient_clip_norm is not None:
@@ -251,7 +251,8 @@ class SAC(OffPolicyAgent):
                     critic1_grads_log['critic/norm'] = critic_norm
                 self._log(do_log_step=False, prefix='gradients', **pi_grads_log, **critic1_grads_log)
             state_values = tf.minimum(critic_loss_info['q1'], critic_loss_info['q2']).numpy()
-            self._log(do_log_step=False, prefix='debug', state_values=state_values, td_targets=targets.numpy())
+            self._log(do_log_step=False, prefix='debug', state_values=state_values, td_targets=targets.numpy(),
+                      alpha=float(self.alpha))
             self._log(do_log_step=True, **loss_dict, train_step=self._train_step)
         return loss_dict
 
