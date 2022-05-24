@@ -23,6 +23,7 @@ def make_env(gym_id, seed, idx, capture_video, output_dir):
             env_args = dict(full_action_space=False,  # reduced action space for easier learning
                             )
         env = gym.make(gym_id, **env_args)
+        env = gym.wrappers.TimeLimit(env)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         if capture_video and idx == 0:
             if not os.path.isdir(f"{output_dir}/videos"):
@@ -66,6 +67,10 @@ if __name__ == "__main__":
         gym_id = 'LunarLander-v2'
     elif args.env.startswith('p'):
         gym_id = 'Pendulum-v1'
+    elif args.env.startswith('wa'):
+        gym_id = 'Walker2d-v2'
+    elif args.env.startswith('ha'):
+        gym_id = 'HalfCheetah-v3'
     else:
         raise ValueError(f'unsupported env {args.env}')
 
@@ -82,13 +87,16 @@ if __name__ == "__main__":
         print(f'AVG SCORE: {avg_score:4.0f}')
         exit()
 
-    for cfg_file in os.listdir(args.config_dir):
+    listdir = os.listdir(args.config_dir)
+    listdir.sort()
+    for cfg_file in listdir:
         gin.parse_config_file(os.path.join(args.config_dir, cfg_file))
+        seeds = [(args.seed * (i + 101)) ** 2 for i in range(args.num_envs * 2)]
         train_envs = gym.vector.SyncVectorEnv(
-            [make_env(gym_id, (args.seed * (i + 101)) ** 2, i, False, args.output_dir)
+            [make_env(gym_id, seeds[i], i, False, args.output_dir)
              for i in range(args.num_envs)])
         test_envs = gym.vector.SyncVectorEnv(
-            [make_env(gym_id, (args.seed * (i + 8)) ** 2, i, args.video, args.output_dir)
+            [make_env(gym_id, seeds[i % (args.num_envs * 2)], i, args.video, args.output_dir)
              for i in range(100)])  # test for 100 runs
         agent = get_agent(args.agent, train_envs, output_dir=args.output_dir, gym_id=gym_id)
         agent, scores = train_agent(agent, train_envs, test_envs, output_dir=args.output_dir)

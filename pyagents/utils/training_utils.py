@@ -131,6 +131,14 @@ def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
             agent_out = agent.act(s_t)
             a_t, lp_t = agent_out.actions, agent_out.logprobs
             s_tp1, r_t, done, info = envs.step(a_t)
+            for i, single_step in enumerate(info):
+                # handle TimeLimit wrapper
+                if 'TimeLimit.truncated' in single_step:
+                    done[i] = not info['TimeLimit.truncated']
+                if "episode" in single_step:
+                    train_info['avg_return'].append(single_step['episode']['r'])
+                    train_info['avg_len'].append(single_step['episode']['l'])
+
             agent.remember(state=s_t,
                            action=a_t,
                            reward=r_t,
@@ -138,10 +146,6 @@ def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
                            done=done,
                            logprob=lp_t)
             s_t = s_tp1
-            for single_step in info:
-                if "episode" in single_step:
-                    train_info['avg_return'].append(single_step['episode']['r'])
-                    train_info['avg_len'].append(single_step['episode']['l'])
 
         loss_dict = agent.train(batch_size, update_rounds=update_rounds)
         train_info['train_step'] = agent.train_step
@@ -164,6 +168,14 @@ def train_off_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
             agent_out = agent.act(s_t)
             a_t, lp_t = agent_out.actions, agent_out.logprobs
             s_tp1, r_t, done, info = envs.step(a_t)
+            for i, single_step in enumerate(info):
+                # handle TimeLimit wrapper
+                if 'TimeLimit.truncated' in single_step:
+                    done[i] = not info['TimeLimit.truncated']
+                if "episode" in single_step:
+                    train_info['avg_return'].append(single_step['episode']['r'])
+                    train_info['avg_len'].append(single_step['episode']['l'])
+
             agent.remember(state=s_t,
                            action=a_t,
                            reward=r_t,
@@ -171,13 +183,9 @@ def train_off_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
                            done=done,
                            logprob=lp_t)
             s_t = s_tp1
-            for single_step in info:
-                if "episode" in single_step:
-                    train_info['avg_return'].append(single_step['episode']['r'])
-                    train_info['avg_len'].append(single_step['episode']['l'])
 
         loss_dict = defaultdict(lambda: 0)  # keeps track of average losses
-        for epoch in range(update_rounds):
+        for _ in range(update_rounds):
             epoch_info = agent.train(batch_size)
             for loss, value in epoch_info.items():
                 loss_dict[loss] += (value / update_rounds)
