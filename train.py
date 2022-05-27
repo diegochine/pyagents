@@ -2,39 +2,12 @@ import argparse
 import os
 
 import numpy as np
-import gym
 from argparse import ArgumentParser
 
 from pyagents.utils import train_agent
 import gin
 
-from pyagents.utils.training_utils import test_agent, get_agent, load_agent
-
-
-def make_env(gym_id, seed, idx, capture_video, output_dir):
-    from pyagents.utils.training_utils import reset_random_seed
-    reset_random_seed(seed)
-
-    def thunk():
-        if not os.path.isdir(output_dir):
-            os.mkdir(output_dir)
-        env_args = dict()
-        if gym_id.startswith('ALE'):
-            env_args = dict(full_action_space=False,  # reduced action space for easier learning
-                            )
-        env = gym.make(gym_id, **env_args)
-        env = gym.wrappers.RecordEpisodeStatistics(env)
-        if capture_video and idx == 0:
-            if not os.path.isdir(f"{output_dir}/videos"):
-                os.mkdir(f"{output_dir}/videos")
-            env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos", episode_trigger=lambda s: (s % 2) == 0)
-        env.seed(seed)
-        env.action_space.seed(seed)
-        env.observation_space.seed(seed)
-        return env
-
-    return thunk
-
+from pyagents.utils.training_utils import test_agent, get_agent, load_agent, get_envs
 
 if __name__ == "__main__":
     import warnings
@@ -52,7 +25,10 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--output-dir', type=str, default='',
                         help='directory where to store trained agent(s)')
     parser.add_argument('-s', '--seed', type=int, default=42,
-                        help='random seed')
+                        help='random seed; each training env is seeded with (seed + i) where i is the individual'
+                             'env index')
+    parser.add_argument('--test-envs', type=int, default=10,
+                        help='number of testing environments')
     parser.add_argument('--video', action=argparse.BooleanOptionalAction, default=False,
                         help='number of parallel envs for vectorized environment')
     args = parser.parse_args()
@@ -71,6 +47,10 @@ if __name__ == "__main__":
         gym_id = 'MountainCar-v0'
     elif args.env.startswith('p'):
         gym_id = 'Pendulum-v1'
+    elif args.env.startswith('wa'):
+        gym_id = 'Walker2d-v2'
+    elif args.env.startswith('ha'):
+        gym_id = 'HalfCheetah-v3'
     else:
         raise ValueError(f'unsupported env {args.env}')
 
@@ -79,25 +59,20 @@ if __name__ == "__main__":
 
     if args.test_ver is not None:
         agent = load_agent(args.agent, args.output_dir, args.test_ver)
-        envs = gym.vector.SyncVectorEnv(
-            [make_env(gym_id, (args.seed * (3 * i)) ** 2, i, True, args.output_dir)
-             for i in range(100)])  # test for 100 runs
+        envs = get_envs(n_envs=args.test_envs, seed=args.seed, gym_id=gym_id,
+                        capture_video=args.video, output_dir=args.output_dir)
         scores = test_agent(agent, envs, render=False)
         avg_score = np.mean(scores)
         print(f'AVG SCORE: {avg_score:4.0f}')
         exit()
 
-    listdir = os.listdir(args.config_dir)
-    listdir.sort()
+    listdir = sorted(os.listdir(args.config_dir))
     for cfg_file in listdir:
         gin.parse_config_file(os.path.join(args.config_dir, cfg_file))
-        seeds = [(args.seed * (i + 101)) ** 2 for i in range(args.num_envs * 2)]
-        train_envs = gym.vector.SyncVectorEnv(
-            [make_env(gym_id, seeds[i], i, False, args.output_dir)
-             for i in range(args.num_envs)])
-        test_envs = gym.vector.SyncVectorEnv(
-            [make_env(gym_id, seeds[i % (args.num_envs * 2)], i, args.video, args.output_dir)
-             for i in range(100)])  # test for 100 runs
+        train_envs = get_envs(n_envs=args.num_envs, seed=args.seed, gym_id=gym_id,
+                              capture_video=args.video, output_dir=args.output_dir)
+        test_envs = get_envs(n_envs=args.test_envs, seed=args.seed, gym_id=gym_id,
+                             capture_video=args.video, output_dir=args.output_dir)
         agent = get_agent(args.agent, train_envs, output_dir=args.output_dir, gym_id=gym_id)
-        agent, scores = train_agent(agent, train_envs, test_envs, output_dir=args.output_dir)
+        agent, scores = train_agent(agent, train_envs, test_envs, seed=args.seed, output_dir=args.output_dir)
         agent.save(ver=-1)
