@@ -106,7 +106,7 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
         action_shape = action_space.n
         log_dict['learning_rate'] = act_start_learning_rate
         q_net = networks.QRQNetwork(state_shape, action_shape)
-        optim = Adam(learning_rate=act_learning_rate, epsilon=0.01/32)
+        optim = Adam(learning_rate=act_learning_rate, epsilon=0.01 / 32)
         agent = agents.QRDQNAgent(state_shape, action_shape, q_net, buffer=buffer, optimizer=optim,
                                   name='qrdqn', wandb_params=wandb_params, save_dir=output_dir,
                                   log_dict=log_dict)
@@ -211,7 +211,8 @@ def train_off_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
 
 
 @gin.configurable
-def train_agent(agent, train_envs, test_env=None, training_steps=10 ** 5, batch_size=64, update_rounds=1,
+def train_agent(agent, train_envs, test_env=None, train_step_fn=None, training_steps=10 ** 5, batch_size=64,
+                update_rounds=1,
                 rollout_steps=100, init_params=None, output_dir="./output/", test_every=100, seed=42, test_rounds=100,
                 unique_seed=False):
     """Performs training of the agent on given train_envs for training_steps, optionally testing the agents
@@ -225,7 +226,6 @@ def train_agent(agent, train_envs, test_env=None, training_steps=10 ** 5, batch_
         init_params = {}
 
     scores = []
-    losses = []
     training_step = 0
     env_step = 0
     best_score = float('-inf')
@@ -237,15 +237,18 @@ def train_agent(agent, train_envs, test_env=None, training_steps=10 ** 5, batch_
         pbar.set_description('INITIALIZING')
         env_config = dict(batch_size=batch_size, rollout_steps=rollout_steps, num_envs=train_envs.num_envs,
                           update_rounds=update_rounds, training_steps=training_steps)
+
         if agent.on_policy:
-            train_step_fn = train_on_policy_agent(batch_size=batch_size,
-                                                  rollout_steps=rollout_steps,
-                                                  update_rounds=update_rounds)
+            if train_step_fn is None:
+                train_step_fn = train_on_policy_agent(batch_size=batch_size,
+                                                      rollout_steps=rollout_steps,
+                                                      update_rounds=update_rounds)
             agent.init(train_envs, rollout_steps, env_config=env_config, **init_params)
         else:
-            train_step_fn = train_off_policy_agent(batch_size=batch_size,
-                                                   rollout_steps=rollout_steps,
-                                                   update_rounds=update_rounds)
+            if train_step_fn is None:
+                train_step_fn = train_off_policy_agent(batch_size=batch_size,
+                                                       rollout_steps=rollout_steps,
+                                                       update_rounds=update_rounds)
             agent.init(train_envs, env_config=env_config, **init_params)
 
         state = train_envs.reset(seed=seed)
