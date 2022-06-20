@@ -190,7 +190,7 @@ def train_off_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
             for i, single_step in enumerate(info):
                 # handle TimeLimit wrapper
                 if 'TimeLimit.truncated' in single_step:
-                    done[i] = not info['TimeLimit.truncated']
+                    done[i] = not info[i]
                 if "episode" in single_step:
                     train_info['avg_return'].append(single_step['episode']['r'])
                     train_info['avg_len'].append(single_step['episode']['l'])

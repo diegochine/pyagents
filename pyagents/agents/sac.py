@@ -38,6 +38,7 @@ class SAC(OffPolicyAgent):
                  train_alpha: bool = True,
                  target_entropy: Optional[float] = None,
                  gradient_clip_norm: Optional[float] = 0.5,
+                 normalize_obs: bool = True,
                  training: bool = True,
                  log_dict: dict = None,
                  name: str = 'SAC',
@@ -47,6 +48,7 @@ class SAC(OffPolicyAgent):
         super(SAC, self).__init__(state_shape,
                                   action_shape,
                                   training=training,
+                                  normalize_obs=normalize_obs,
                                   buffer=buffer,
                                   save_dir=save_dir,
                                   name=name,
@@ -80,7 +82,7 @@ class SAC(OffPolicyAgent):
         self.target_update_period = target_update_period
         self.tau = tau
         self._gradient_clip_norm = gradient_clip_norm
-        self.target_entropy = target_entropy if target_entropy else -np.prod(self.action_shape) / 2.0
+        self.target_entropy = target_entropy if target_entropy else -np.prod(self.action_shape)
         if reward_normalization:
             self.init_normalizer('reward', (1,))
         self.reward_scale = reward_scale
