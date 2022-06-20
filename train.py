@@ -61,7 +61,7 @@ if __name__ == "__main__":
         agent = load_agent(args.agent, args.output_dir, args.test_ver)
         envs = get_envs(n_envs=args.test_envs, seed=args.seed, gym_id=gym_id,
                         capture_video=args.video, output_dir=args.output_dir)
-        scores = test_agent(agent, envs, render=False)
+        scores = test_agent(agent, envs, render=False, seed=args.seed, n_episodes=100)
         avg_score = np.mean(scores)
         print(f'AVG SCORE: {avg_score:4.0f}')
         exit()

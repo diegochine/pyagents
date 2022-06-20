@@ -89,7 +89,6 @@ class C51DQNAgent(DQNAgent):
         if optimizer is None and training:
             raise ValueError('agent cannot be trained without optimizer')
 
-        self._gamma = tf.constant(gamma, dtype=self.dtype)
         assert isinstance(q_network, C51QNetwork), 'distributional dqn agent requires distributional q net'
         self._online_q_network = q_network
         self._target_q_network = deepcopy(self._online_q_network)

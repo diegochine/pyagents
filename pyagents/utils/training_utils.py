@@ -314,7 +314,7 @@ def load_agent(algo, path, ver):
         agent = agents.DDPG.load(path, ver=ver, training=False)
     elif algo == 'ppo':
         agent = agents.PPO.load(path, ver=ver, training=False)
-    elif algo == 'qrdn':
+    elif algo == 'qrdqn':
         agent = agents.QRDQNAgent.load(path, ver=ver, training=False)
     else:
         raise ValueError(f'unsupported algorithm {algo}')

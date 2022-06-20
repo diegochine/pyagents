@@ -83,7 +83,6 @@ class QRDQNAgent(DQNAgent):
         if optimizer is None and training:
             raise ValueError('agent cannot be trained without optimizer')
 
-        self._gamma = tf.constant(gamma, dtype=self.dtype)
         assert isinstance(q_network, QRQNetwork), 'distributional dqn agent requires distributional q net'
         self._online_q_network = q_network
         self._target_q_network = deepcopy(self._online_q_network)
@@ -119,7 +118,6 @@ class QRDQNAgent(DQNAgent):
 
     def _loss(self, memories, weights=None):
         state_batch, action_batch, reward_batch, next_state_batch, done_batch = memories
-        batch_size = state_batch.shape[0]
         # boolean mask to choose only performed actions, assumes 1d action space
         mask = tf.one_hot(action_batch, self.action_shape, on_value=True, off_value=False)
 
@@ -178,7 +176,8 @@ class QRDQNAgent(DQNAgent):
         action_batch = tf.convert_to_tensor([sample[1] for sample in minibatch], dtype=tf.int32)
         reward_batch = tf.convert_to_tensor([sample[2] for sample in minibatch], dtype=self.dtype)
         reward_batch = tf.reshape(reward_batch, (-1, 1))
-        done_batch = np.array([sample[4] for sample in minibatch]).reshape((-1, 1))
+        done_batch = tf.convert_to_tensor([1. if sample[4] else 0. for sample in minibatch], dtype=self.dtype)
+        done_batch = tf.reshape(done_batch, (-1, 1))
         return [states_batch, action_batch, reward_batch, next_states_batch, done_batch]
 
     @staticmethod

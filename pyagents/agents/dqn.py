@@ -84,7 +84,7 @@ class DQNAgent(OffPolicyAgent):
             raise ValueError('agent cannot be trained without optimizer')
         # assert isinstance(action_shape, int), 'current implementation only supports 1D discrete action spaces'
 
-        self._gamma = gamma * self._memory.n_step_return  # takes into account eventual n_step returns
+        self._gamma = tf.constant(gamma * self._memory.n_step_return, dtype=self.dtype) # takes into account eventual n_step returns
         self._online_q_network = q_network
         self._target_q_network = deepcopy(self._online_q_network)
         self._target_update_period = target_update_period
@@ -158,7 +158,6 @@ class DQNAgent(OffPolicyAgent):
 
     def _train(self, batch_size=128, *args, **kwargs):
         assert self._training, 'called train function while in evaluation mode, call toggle_training() before'
-        # assert len(self._memory) > batch_size, f'batch size bigger than amount of memories'
         memories, indexes, is_weights = self._memory.sample(batch_size, vectorizing_fn=self._minibatch_to_tf)
         # resets noisy layers noise parameters (if used)
         if self._online_q_network.noisy_layers:
@@ -167,7 +166,7 @@ class DQNAgent(OffPolicyAgent):
 
         # compute loss
         with tf.GradientTape() as tape:
-            loss_info = self._loss(memories, weights=is_weights)
+            loss_info = self._loss(memories, weights=tf.constant(is_weights, dtype=self.dtype))
             loss = loss_info['loss']
         # use computed loss to update memories priorities (when using a prioritized buffer)
         self._memory.update_samples(tf.math.abs(loss_info['td_residuals']), indexes)
@@ -192,11 +191,6 @@ class DQNAgent(OffPolicyAgent):
             epsilon = self._policy.epsilon
         else:
             epsilon = 0
-
-        # # resets noisy layers noise parameters (if used)
-        # if self._online_q_network.noisy_layers:
-        #     self._online_q_network.reset_noise()
-        #     self._target_q_network.reset_noise()
 
         # logging
         if self.is_logging:

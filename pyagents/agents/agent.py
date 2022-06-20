@@ -215,7 +215,8 @@ class Agent(tf.Module, abc.ABC):
             state: Current state.
             mask: (Optional) Boolean mask for illegal actions. Defaults to None
         """
-        state = self.update_normalizer('obs', state)
+        if 'obs' in self.normalizers:
+            state = self.update_normalizer('obs', state)
         return self._policy.act(state, mask=mask, training=self._training and training)
 
     def _loss(self, *args, **kwargs):
