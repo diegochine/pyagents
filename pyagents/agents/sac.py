@@ -23,8 +23,9 @@ class SAC(OffPolicyAgent):
                  actor: PolicyNetwork,
                  critic: QNetwork,
                  actor_opt: tf.keras.optimizers.Optimizer = None,
-                 critic_opt: tf.keras.optimizers.Optimizer = None,
+                 critic1_opt: tf.keras.optimizers.Optimizer = None,
                  critic2: Optional[QNetwork] = None,
+                 critic2_opt: tf.keras.optimizers.Optimizer = None,
                  alpha_opt: Optional[tf.keras.optimizers.Optimizer] = None,
                  policy: Policy = None,
                  buffer: Optional[Buffer] = None,
@@ -53,7 +54,7 @@ class SAC(OffPolicyAgent):
                                   save_dir=save_dir,
                                   name=name,
                                   dtype=dtype)
-        if (actor_opt is None or critic_opt is None) and training:
+        if (actor_opt is None or critic1_opt is None or critic2_opt is None) and training:
             raise ValueError('agent cannot be trained without optimizers')
 
         self._actor = actor
@@ -64,7 +65,8 @@ class SAC(OffPolicyAgent):
             self._online_critic2 = deepcopy(self._online_critic1)
         self._target_critic2 = deepcopy(self._online_critic2)
         self._actor_opt = actor_opt
-        self._critic_opt = critic_opt
+        self._critic1_opt = critic1_opt
+        self._critic2_opt = critic2_opt
 
         self._initial_alpha = initial_alpha
         self.train_alpha = train_alpha
@@ -150,17 +152,13 @@ class SAC(OffPolicyAgent):
     def _loss(self, *args, **kwargs):
         pass
 
-    def _loss_q(self, states, actions, targets) -> dict:
-        q1 = self._online_critic1((states, actions)).critic_values
-        q2 = self._online_critic2((states, actions)).critic_values
-        q1_td_loss = tf.math.squared_difference(q1, targets)
-        q1_loss = tf.reduce_mean(q1_td_loss)
-        q2_td_loss = tf.math.squared_difference(q2, targets)
-        q2_loss = tf.reduce_mean(q2_td_loss)
-        critic_loss = 0.5 * (q1_td_loss + q2_td_loss)
-        return {'critic_loss': critic_loss,
-                'critic1_loss': q1_loss, 'critic2_loss': q2_loss,
-                'q1': q1, 'q2': q2}
+    def _loss_q(self, q_net, states, actions, targets) -> dict:
+        q = q_net((states, actions)).critic_values
+        q_td_loss = tf.math.squared_difference(q, targets)
+        q_loss = tf.reduce_mean(q_td_loss)
+        return {'critic_loss': q_loss,
+                'critic_td_loss': q_td_loss,
+                'q': q}
 
     def _loss_pi(self, states) -> dict:
         # alpha log pi - q due to gradient ascent
@@ -168,8 +166,8 @@ class SAC(OffPolicyAgent):
         actions = act_out.action
         logprobs = act_out.logprobs
 
-        q = tf.minimum(tf.stop_gradient(self._online_critic1((states, actions)).critic_values),
-                       tf.stop_gradient(self._online_critic2((states, actions)).critic_values))
+        q = tf.reduce_mean([tf.stop_gradient(self._online_critic1((states, actions)).critic_values),
+                           tf.stop_gradient(self._online_critic2((states, actions)).critic_values)], axis=0)
         act_loss = tf.reduce_mean(self.alpha * tf.expand_dims(logprobs, 1) - q)
         return {'act_loss': act_loss, 'logprobs': logprobs}
 
@@ -190,45 +188,39 @@ class SAC(OffPolicyAgent):
         targets = self.reward_scale * rewards + self.gamma * (1 - dones) * (
                 tf.minimum(q1_target, q2_target) - self.alpha * tf.expand_dims(act_out.logprobs, 1))
 
-        critic_vars = self._online_critic1.trainable_variables + self._online_critic2.trainable_variables
-        with tf.GradientTape(watch_accessed_variables=False) as q_tape:
-            q_tape.watch(critic_vars)
-            critic_loss_info = self._loss_q(states, actions, tf.stop_gradient(targets))
-            critic_td_loss = critic_loss_info['critic_loss']
-            critic_loss = tf.reduce_mean(is_weights * critic_td_loss)
-        assert not tf.math.is_inf(critic_loss) and not tf.math.is_nan(critic_loss)
+        critic_loss_info = dict()
+        for i, (q, q_opt) in enumerate(zip([self._online_critic1, self._online_critic2],
+                                           [self._critic1_opt, self._critic2_opt])):
+            critic_vars = q.trainable_variables
+            with tf.GradientTape(watch_accessed_variables=False) as q_tape:
+                q_tape.watch(critic_vars)
+                info = self._loss_q(q, states, actions, tf.stop_gradient(targets))
+                critic_loss = info['critic_loss']
 
+            critic_grads_and_vars, critic_norm = self._apply_gradients(critic_loss, q_opt, critic_vars, q_tape)
+            critic_loss_info[f'critic{i + 1}_loss'] = critic_loss
+            critic_loss_info[f'critic{i + 1}_td_loss'] = info['critic_td_loss']
+            critic_loss_info[f'q{i + 1}'] = info['q']
         # use computed loss to update memories priorities (when using a prioritized buffer) TODO verify
+        critic_td_loss = 0.5 * is_weights * tf.squeeze(
+            critic_loss_info['critic1_td_loss'] + critic_loss_info['critic2_td_loss'])
         self._memory.update_samples(tf.math.abs(tf.squeeze(critic_td_loss)), indexes)
 
-        critic_grads = q_tape.gradient(critic_loss, critic_vars)
-        if self._gradient_clip_norm is not None:
-            critic_grads, critic_norm = tf.clip_by_global_norm(critic_grads, self._gradient_clip_norm)
-        critic_grads_and_vars = list(zip(critic_grads, critic_vars))
-        self._critic_opt.apply_gradients(critic_grads_and_vars)
-
+        actor_vars = self._actor.trainable_variables
         with tf.GradientTape(watch_accessed_variables=False) as pi_tape:
-            pi_tape.watch(self._actor.trainable_variables)
+            pi_tape.watch(actor_vars)
             pi_loss_info = self._loss_pi(states)
             act_loss = pi_loss_info['act_loss']
-        assert not tf.math.is_inf(act_loss) and not tf.math.is_nan(act_loss)
-        actor_grads = pi_tape.gradient(act_loss, self._actor.trainable_variables)
-        if self._gradient_clip_norm is not None:
-            actor_grads, actor_norm = tf.clip_by_global_norm(actor_grads, self._gradient_clip_norm)
-        actor_grads_and_vars = list(zip(actor_grads, self._actor.trainable_variables))
-        self._actor_opt.apply_gradients(actor_grads_and_vars)
+        actor_grads_and_vars, actor_norm = self._apply_gradients(act_loss, self._actor_opt, actor_vars, pi_tape)
 
         if self.train_alpha:
             logprobs = pi_loss_info['logprobs']
             with tf.GradientTape(watch_accessed_variables=False) as alpha_tape:
                 alpha_tape.watch([self._log_alpha])
-                alpha_loss = tf.reduce_mean(- tf.exp(self._log_alpha) * (tf.stop_gradient(logprobs + self.target_entropy)))
-            assert not tf.math.is_inf(alpha_loss) and not tf.math.is_nan(alpha_loss)
-            alpha_grads = alpha_tape.gradient(alpha_loss, [self._log_alpha])
-            if self._gradient_clip_norm is not None:
-                alpha_grads, _ = tf.clip_by_global_norm(alpha_grads, self._gradient_clip_norm)
-            alpha_grads_and_vars = list(zip(alpha_grads, [self._log_alpha]))
-            self._alpha_opt.apply_gradients(alpha_grads_and_vars)
+                alpha_loss = tf.reduce_mean(
+                    - tf.exp(self._log_alpha) * (tf.stop_gradient(logprobs + self.target_entropy)))
+            alpha_grads_and_vars, alpha_norm = self._apply_gradients(alpha_loss, self._alpha_opt,
+                                                                     [self._log_alpha], alpha_tape)
 
         if self._train_step % self.target_update_period == 0:
             for o, t in zip([self._online_critic1, self._online_critic2], [self._target_critic1, self._target_critic2]):
@@ -237,9 +229,12 @@ class SAC(OffPolicyAgent):
                               tau=self.tau)
         self._train_step += 1
 
-        loss_dict = {'policy_loss': float(act_loss), 'critic_loss': float(critic_loss),
-                     'critic1_loss': float(critic_loss_info['critic1_loss']),
-                     'critic2_loss': float(critic_loss_info['critic2_loss'])}
+        critic1 = critic_loss_info['critic1_loss']
+        critic2 = critic_loss_info['critic2_loss']
+        loss_dict = {'policy_loss': float(act_loss),
+                     'critic_loss': float(tf.reduce_mean([critic1, critic2])),
+                     'critic1_loss': float(critic1),
+                     'critic2_loss': float(critic2)}
         if self.train_alpha:
             loss_dict['alpha_loss'] = float(alpha_loss)
         if self.is_logging:
@@ -257,6 +252,16 @@ class SAC(OffPolicyAgent):
                       alpha=float(self.alpha))
             self._log(do_log_step=True, **loss_dict, train_step=self._train_step)
         return loss_dict
+
+    def _apply_gradients(self, loss, opt, vars, tape):
+        assert not tf.math.is_inf(loss) and not tf.math.is_nan(loss)
+        grads = tape.gradient(loss, vars)
+        norm = None
+        if self._gradient_clip_norm is not None:
+            grads, norm = tf.clip_by_global_norm(grads, self._gradient_clip_norm)
+        critic_grads_and_vars = list(zip(grads, vars))
+        opt.apply_gradients(critic_grads_and_vars)
+        return critic_grads_and_vars, norm
 
     def _networks_config_and_weights(self):
         return [('actor', self._actor.get_config(), self._actor.get_weights()),
