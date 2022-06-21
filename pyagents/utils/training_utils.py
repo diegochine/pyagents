@@ -20,10 +20,12 @@ def get_optimizer(learning_rate=0.001):
 
 
 @gin.configurable
-def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='uniform',
-              crit_start_learning_rate=None, schedule=True, wandb_params=None, gym_id=None, training_steps=10 ** 5):
+def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='uniform', crit_start_learning_rate=None,
+              alpha_start_learning_rate=None, schedule=True, wandb_params=None, gym_id=None, training_steps=10 ** 5):
     if crit_start_learning_rate is None:
         crit_start_learning_rate = act_start_learning_rate
+    if alpha_start_learning_rate is None:
+        alpha_start_learning_rate = act_start_learning_rate
     if schedule:
         act_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(act_start_learning_rate,
                                                                           training_steps,
@@ -31,9 +33,14 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
         crit_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(crit_start_learning_rate,
                                                                            training_steps,
                                                                            crit_start_learning_rate / 1000)
+
+        alpha_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(alpha_start_learning_rate,
+                                                                            training_steps,
+                                                                            crit_start_learning_rate / 1000)
     else:
         act_learning_rate = act_start_learning_rate
         crit_learning_rate = crit_start_learning_rate
+        alpha_learning_rate = alpha_start_learning_rate
 
     if isinstance(env, gym.vector.VectorEnv):
         state_shape = env.single_observation_space.shape
@@ -132,7 +139,7 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
         a_opt = get_optimizer(learning_rate=act_learning_rate)
         c1_opt = get_optimizer(learning_rate=crit_learning_rate)
         c2_opt = get_optimizer(learning_rate=crit_learning_rate)
-        alpha_opt = get_optimizer(learning_rate=crit_start_learning_rate)
+        alpha_opt = get_optimizer(learning_rate=alpha_learning_rate)
 
         agent = agents.SAC(state_shape, action_shape, actor=a_net, buffer=buffer,
                            critic=q1_net, actor_opt=a_opt, critic1_opt=c1_opt,
@@ -140,7 +147,7 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
                            alpha_opt=alpha_opt, wandb_params=wandb_params, save_dir=output_dir,
                            log_dict={'actor_learning_rate': act_start_learning_rate,
                                      'critic_learning_rate': crit_start_learning_rate,
-                                     'alpha_learning_rate': crit_start_learning_rate})
+                                     'alpha_learning_rate': alpha_start_learning_rate})
     else:
         raise ValueError(f'unsupported algorithm {algo}')
     return agent
@@ -156,7 +163,7 @@ def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
             for i, single_step in enumerate(info):
                 # handle TimeLimit wrapper
                 if 'TimeLimit.truncated' in single_step:
-                    done[i] = not info['TimeLimit.truncated']
+                    done[i] = not info[i]
                 if "episode" in single_step:
                     train_info['avg_return'].append(single_step['episode']['r'])
                     train_info['avg_len'].append(single_step['episode']['l'])

@@ -154,7 +154,7 @@ class SAC(OffPolicyAgent):
 
     def _loss_q(self, q_net, states, actions, targets) -> dict:
         q = q_net((states, actions)).critic_values
-        q_td_loss = tf.math.squared_difference(q, targets)
+        q_td_loss = 0.5 * tf.math.squared_difference(q, targets)
         q_loss = tf.reduce_mean(q_td_loss)
         return {'critic_loss': q_loss,
                 'critic_td_loss': q_td_loss,
@@ -166,8 +166,8 @@ class SAC(OffPolicyAgent):
         actions = act_out.action
         logprobs = act_out.logprobs
 
-        q = tf.reduce_mean([tf.stop_gradient(self._online_critic1((states, actions)).critic_values),
-                           tf.stop_gradient(self._online_critic2((states, actions)).critic_values)], axis=0)
+        q = tf.reduce_mean([self._online_critic1((states, actions)).critic_values,
+                            self._online_critic2((states, actions)).critic_values], axis=0)
         act_loss = tf.reduce_mean(self.alpha * tf.expand_dims(logprobs, 1) - q)
         return {'act_loss': act_loss, 'logprobs': logprobs}
 
