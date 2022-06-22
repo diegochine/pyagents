@@ -98,8 +98,9 @@ class QLayer(tf.keras.layers.Layer):
             x = self._dense(inputs)
             if self.dropout:
                 x = self._dropout(x, training=training)
+            qvals = self._qvals(x)
             if self.distributional:
-                qvals = tf.reshape(self._qvals(x), (-1, self.action_shape, self.n))
+                qvals = tf.reshape(qvals, (-1, self.action_shape, self.n))
             return qvals
 
     def reset_noise(self):
