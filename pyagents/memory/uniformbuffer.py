@@ -18,7 +18,7 @@ class UniformBuffer(Buffer):
         self._n = n_step_return - 1
         self._stmemory = deque(maxlen=self._n)
         self._ltmemory = deque(maxlen=size)
-        self._config = {'size': size, 'n_step_return': n_step_return}
+        self._config = {'size': size, 'n_step_return': n_step_return, 'type': 'uniform'}
 
     def __len__(self):
         return len(self.ltmemory)

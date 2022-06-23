@@ -25,7 +25,7 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
               log_dict=None):
     if log_dict is None:
         log_dict = dict()
-    log_dict.update({'schedule': schedule, 'buffer': buffer})
+    log_dict.update({'schedule': schedule})
 
     if crit_start_learning_rate is None:
         crit_start_learning_rate = act_start_learning_rate

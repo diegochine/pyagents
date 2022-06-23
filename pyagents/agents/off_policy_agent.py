@@ -39,6 +39,7 @@ class OffPolicyAgent(Agent, ABC):
             self._memory: Buffer = PrioritizedBuffer(save_dir=self._save_dir)
         else:
             raise ValueError(f'unrecognized buffer param {buffer}')
+        self._config.update({f'buffer/{k}': v for k, v in self._memory.get_config().items()})
 
     @property
     def on_policy(self):
