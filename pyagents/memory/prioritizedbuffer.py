@@ -53,7 +53,7 @@ class PrioritizedBuffer(UniformBuffer):
     def sample(self, batch_size, vectorizing_fn=lambda x: x):
         bounds = np.linspace(0., 1., batch_size + 1)
         indexes = [self._sum_tree.sample(lb=bounds[i], ub=bounds[i + 1]) for i in range(batch_size)]
-        priorities = np.array([self._sum_tree.get(idx) for idx in indexes]) + self._eps
+        priorities = np.array([self._sum_tree.get(idx) for idx in indexes])
         samples = [tuple(self._ltmemory[idx].values()) for idx in indexes]
         if self._beta != 0:
             priorities_pow = np.power(priorities, self._alpha)
@@ -68,4 +68,4 @@ class PrioritizedBuffer(UniformBuffer):
     def update_samples(self, errors, indexes):
         assert len(errors.shape) == 1 and errors.shape[0] == len(indexes)
         for error_idx, mem_idx in enumerate(indexes):
-            self._sum_tree.set(mem_idx, errors[error_idx].numpy())
+            self._sum_tree.set(mem_idx, errors[error_idx].numpy() + self._eps)
