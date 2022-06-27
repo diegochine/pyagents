@@ -13,8 +13,8 @@ class PrioritizedBuffer(UniformBuffer):
                  size=100000,
                  n_step_return=1,
                  eps=0.02,
-                 alpha=0.6,
-                 beta=(0.0, 1.0, 10 ** 6)):
+                 alpha=0.5,
+                 beta=(0.4, 1.0, 10 ** 6)):
         super().__init__(save_dir=save_dir, n_step_return=n_step_return)
         self._sum_tree = SumTree(size)
         self._size = size
@@ -22,22 +22,20 @@ class PrioritizedBuffer(UniformBuffer):
         self._ptr = 0
         self._eps = eps
         self._alpha = alpha
-        if isinstance(beta, int):
+        if isinstance(beta, float):
             self._beta = beta
             self._beta_max = beta
             self._beta_inc = 0
         elif isinstance(beta, tuple):
             self._beta, self._beta_max, steps = beta
             self._beta_inc = (self._beta_max - self._beta) / steps
+        else:
+            raise ValueError(f'unrecognized beta type {type(beta)}, {beta}')
         self._config.update({'type': 'PER', 'eps_buffer': eps, 'alpha': alpha,
                              'beta': self._beta, 'beta_max': self._beta_max, 'beta_inc': self._beta_inc})
 
     def __len__(self):
         return len(self._sum_tree)
-
-    @property
-    def n_step_return(self):
-        return self._n + 1
 
     def get_config(self):
         return self._config

@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 import pyagents.agents as agents
 import pyagents.networks as networks
+from pyagents.utils.obs_wrapper import ObservationWrapper
 
 
 @gin.configurable
@@ -60,6 +61,8 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
         bounds = (action_space.low, action_space.high)
 
     if algo in ('vpg', 'ppo'):
+        if isinstance(action_space, gym.spaces.Discrete):
+            action_shape = (action_shape, )
         a_net = networks.PolicyNetwork(state_shape, action_shape, output=output, bounds=bounds)
         v_net = networks.ValueNetwork(state_shape)
         a_opt = get_optimizer(learning_rate=act_learning_rate)
@@ -133,7 +136,7 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
 
 def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
     def train_step(agent, envs, s_t):
-        train_info = {'avg_return': [], 'avg_len': []}
+        train_info = defaultdict(lambda: list())
         for _ in range(rollout_steps):
             agent_out = agent.act(s_t)
             a_t, lp_t = agent_out.actions, agent_out.logprobs
@@ -156,12 +159,6 @@ def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
 
         loss_dict = agent.train(batch_size, update_rounds=update_rounds)
         train_info['train_step'] = agent.train_step
-        if train_info['avg_return']:
-            train_info['avg_return'] = np.mean(train_info['avg_return'])
-            train_info['avg_len'] = np.mean(train_info['avg_len'])
-        else:
-            train_info['avg_return'] = None
-            train_info['avg_len'] = None
         train_info = {**train_info, **loss_dict}
         return s_t, train_info
 
@@ -170,7 +167,7 @@ def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
 
 def train_off_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
     def train_step(agent, envs, s_t):
-        train_info = {'avg_return': [], 'avg_len': []}
+        train_info = defaultdict(lambda: list())
         for _ in range(rollout_steps):
             agent_out = agent.act(s_t)
             a_t, lp_t = agent_out.actions, agent_out.logprobs
@@ -198,12 +195,6 @@ def train_off_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
                 loss_dict[loss] += (value / update_rounds)
 
         train_info['train_step'] = agent.train_step
-        if train_info['avg_return']:
-            train_info['avg_return'] = np.mean(train_info['avg_return'])
-            train_info['avg_len'] = np.mean(train_info['avg_len'])
-        else:
-            train_info['avg_return'] = None
-            train_info['avg_len'] = None
         train_info = {**train_info, **loss_dict}
         return s_t, train_info
 
@@ -227,11 +218,10 @@ def train_agent(agent, train_envs, test_env=None, train_step_fn=None, training_s
 
     scores = []
     training_step = 0
-    env_step = 0
     best_score = float('-inf')
     k = 0
-    avg_r, avg_l = 0, 0
-
+    avg_r, avg_l = None, None
+    episodes = 0
     print(f'{"*" * 42}\nSTARTING TRAINING\n{"*" * 42}')
     with tqdm(total=training_steps) as pbar:
         pbar.set_description('INITIALIZING')
@@ -251,7 +241,7 @@ def train_agent(agent, train_envs, test_env=None, train_step_fn=None, training_s
                                                        update_rounds=update_rounds)
             agent.init(train_envs, env_config=env_config, **init_params)
 
-        state = train_envs.reset(seed=seed)
+        state = train_envs.reset() #seed=seed
         if not unique_seed:
             seed = ((seed ** 2) + 33) // 2  # generate new random seed for testing, pretty arbitrary here
         pbar.set_description('TRAINING')
@@ -270,37 +260,61 @@ def train_agent(agent, train_envs, test_env=None, train_step_fn=None, training_s
                 info['test/score'] = avg_score
                 pbar.set_description(f'[EVAL SCORE: {avg_score:4.0f}] TRAINING')
 
-            if info['avg_return'] is not None:  # handle prettier tqdm printing
-                avg_r = info['avg_return']
-                avg_l = info['avg_len']
-            else:
-                info['avg_return'] = avg_r
-                info['avg_len'] = avg_l
+            if agent.is_logging:
+                if 'avg_return' in info:
+                    for avg_r, avg_l in zip(info.pop('avg_return'), info.pop('avg_len')):
+                        wandb.log({'episode': episodes, 'avg_return': avg_r, 'avg_len': avg_l})
+                        episodes += 1
+                wandb.log(info)  # this logging adds some useless keys to info
+                del info['_timestamp']
+                del info['_runtime']
 
             pbar.update(update_rounds)
-            pbar.set_postfix(**info)
-
-            if agent.is_logging:
-                wandb.log(info)
+            pbar.set_postfix(**info, avg_r=avg_r, avg_l=avg_l)
 
     agent.save(ver=0)
     return agent, scores
 
 
 def test_agent(agent, envs, seed, n_episodes, render=False):
-    scores = []
-    episode = 0
-    s_t = envs.reset(seed=seed)
-    while episode < n_episodes:
-        if render:
-            envs.render()
+    def no_vec_test(env, s_t):
+        score, episode = 0, 0
+        s_t = tf.expand_dims(s_t, axis=0)
+        a_t = agent.act(s_t, training=False).actions[0]
+        s_tp1, _, done, info = env.step(a_t)
+        s_t = s_tp1
+        if done:
+            s_t = envs.reset()
+        if "episode" in info.keys():
+            score = [info['episode']['r']]
+            episode = 1
+        return score, episode, s_t
+
+    def vec_test(envs, s_t):
+        episodes = 0
+        scores = []
         a_t = agent.act(s_t, training=False).actions
-        s_tp1, _, _, info = envs.step(a_t)
+        s_tp1, _, d, info = envs.step(a_t)
         s_t = s_tp1
         for single_step in info:
             if "episode" in single_step.keys():
                 scores.append(single_step['episode']['r'])
-                episode += 1
+                episodes += 1
+        return scores, episodes, s_tp1
+
+    scores = []
+    episode = 0
+    s_t = envs.reset()# seed=seed
+    test_step_fn = vec_test if isinstance(envs, gym.vector.VectorEnv) else no_vec_test
+    while episode < n_episodes:
+        if render:
+            envs.render()
+            import time
+            time.sleep(0.05)
+        step_scores, step_episodes, s_t = test_step_fn(envs, s_t)
+        if step_episodes > 0:
+            episode += step_episodes
+            scores += step_scores
     return np.array(scores)
 
 
@@ -325,7 +339,8 @@ def load_agent(algo, path, ver):
 
 
 @gin.configurable
-def get_envs(n_envs, gym_id, seed, capture_video, output_dir, async_envs=False, record_every=5):
+def get_envs(n_envs, gym_id, seed, capture_video, output_dir, frame_stack=4, async_envs=False, no_vect=False,
+             record_every=10):
     """Creates vectorized environments."""
 
     def make_env(gym_id, seed, idx, capture_video, output_dir):
@@ -338,28 +353,40 @@ def get_envs(n_envs, gym_id, seed, capture_video, output_dir, async_envs=False, 
             if gym_id.startswith('ALE'):
                 env_args = dict(full_action_space=False,  # reduced action space for easier learning
                                 )
+            if gym_id.startswith('Viz'):
+                env_args = dict(frame_skip=4)
             env = gym.make(gym_id, **env_args)
-            env = gym.wrappers.TimeLimit(env)
-            env = gym.wrappers.RecordEpisodeStatistics(env)
+
             if capture_video and idx == 0:
                 if not os.path.isdir(f"{output_dir}/videos"):
                     os.mkdir(f"{output_dir}/videos")
                 env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos",
-                                               episode_trigger=lambda e: (e % record_every) == 0)
-            env.seed(seed)
-            env.action_space.seed(seed)
-            env.observation_space.seed(seed)
+                                               episode_trigger=lambda e: (e % record_every) == 5)
+
+            if gym_id.startswith('Viz'):
+                env = ObservationWrapper(env)
+                env = gym.wrappers.TransformReward(env, lambda r: r * 0.01)
+
+            if frame_stack > 1:
+                env = gym.wrappers.FrameStack(env, num_stack=frame_stack)
+            # env = gym.wrappers.TimeLimit(env)
+            env = gym.wrappers.RecordEpisodeStatistics(env)
+            #env.seed(seed)
+            #env.action_space.seed(seed)
+            #env.observation_space.seed(seed)
             return env
 
         return thunk
-
-    if async_envs:
-        vec_fn = gym.vector.AsyncVectorEnv
+    if no_vect:
+        envs = make_env(gym_id, seed, 0, capture_video, output_dir)()
     else:
-        vec_fn = gym.vector.SyncVectorEnv
-    envs = vec_fn(
-        [make_env(gym_id, seed + i, i, capture_video if i == 0 else False, output_dir)
-         for i in range(n_envs)])
+        if async_envs:
+            vec_fn = gym.vector.AsyncVectorEnv
+        else:
+            vec_fn = gym.vector.SyncVectorEnv
+        envs = vec_fn(
+            [make_env(gym_id, seed + i, i, capture_video if i == 0 else False, output_dir)
+             for i in range(n_envs)])
 
     return envs
 

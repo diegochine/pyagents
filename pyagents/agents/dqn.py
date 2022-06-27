@@ -35,7 +35,7 @@ class DQNAgent(OffPolicyAgent):
                  ddqn: bool = True,
                  buffer: Optional = 'uniform',
                  loss_fn: str = 'mse',
-                 gradient_clip_norm: Optional[float] = 0.5,
+                 gradient_clip_norm: Optional[float] = 1.0,
                  normalize_obs: bool = True,
                  reward_scaling: float = 1.0,
                  log_dict: dict = None,
@@ -43,7 +43,8 @@ class DQNAgent(OffPolicyAgent):
                  training: bool = True,
                  save_dir: str = './output',
                  wandb_params: Optional[dict] = None,
-                 dtype: str = 'float32'):
+                 dtype: str = 'float32',
+                 **kwargs):
         """Creates a DQN agent.
 
         Args:
@@ -73,6 +74,7 @@ class DQNAgent(OffPolicyAgent):
             """
         super(DQNAgent, self).__init__(state_shape,
                                        action_shape,
+                                       gamma=gamma,
                                        normalize_obs=normalize_obs,
                                        reward_scaling=reward_scaling,
                                        training=training,
@@ -84,7 +86,6 @@ class DQNAgent(OffPolicyAgent):
             raise ValueError('agent cannot be trained without optimizer')
         # assert isinstance(action_shape, int), 'current implementation only supports 1D discrete action spaces'
 
-        self._gamma = tf.constant(gamma * self._memory.n_step_return, dtype=self.dtype) # takes into account eventual n_step returns
         self._online_q_network = q_network
         self._target_q_network = deepcopy(self._online_q_network)
         self._target_update_period = target_update_period
@@ -97,18 +98,20 @@ class DQNAgent(OffPolicyAgent):
         self._name = name
 
         self.config.update({
-            'gamma': self._gamma,
             'target_update_period': self._target_update_period,
             'tau': self._tau,
             'ddqn': self._ddqn,
             'gradient_clip_norm': self._gradient_clip_norm
         })
 
+        if log_dict is None:
+            log_dict = {}
         policy = QPolicy(self._state_shape, self._action_shape, self._online_q_network)
         if self._online_q_network.noisy_layers:
             self._policy = policy
         else:
             self._policy: EpsGreedyPolicy = EpsGreedyPolicy(policy, epsilon, epsilon_decay, epsilon_min)
+            log_dict.update({'epsilon_start': epsilon, 'epsilon_min': epsilon_min, 'epsilon_decay': epsilon_decay})
 
         if wandb_params:
             self._init_logger(wandb_params,
@@ -143,7 +146,7 @@ class DQNAgent(OffPolicyAgent):
         else:
             # standard dqn target
             bootstrap_values = tf.math.reduce_max(next_target_q_values, axis=1)
-        bootstrap_rews = tf.stop_gradient(reward_batch + self._gamma * bootstrap_values)
+        bootstrap_rews = tf.stop_gradient(reward_batch + self._gamma_n * bootstrap_values)
 
         target_q_values = tf.where(done_batch, reward_batch, bootstrap_rews)
         # loss function reduces last axis, so we reshape to add a dummy one
@@ -177,7 +180,6 @@ class DQNAgent(OffPolicyAgent):
             grads, norm = tf.clip_by_global_norm(grads, self._gradient_clip_norm)
         grads_and_vars = list(zip(grads, variables_to_train))
         self._optimizer.apply_gradients(grads_and_vars)
-        self._train_step += 1
 
         # periodically update target network
         if tf.math.mod(self._train_step, self._target_update_period) == 0:

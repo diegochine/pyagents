@@ -27,7 +27,7 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--seed', type=int, default=42,
                         help='random seed; each training env is seeded with (seed + i) where i is the individual'
                              'env index')
-    parser.add_argument('--test-envs', type=int, default=10,
+    parser.add_argument('--test-envs', type=int, default=5,
                         help='number of testing environments')
     parser.add_argument('--video', action=argparse.BooleanOptionalAction, default=False,
                         help='number of parallel envs for vectorized environment')
@@ -51,6 +51,12 @@ if __name__ == "__main__":
         gym_id = 'Walker2d-v2'
     elif args.env.startswith('ha'):
         gym_id = 'HalfCheetah-v3'
+    elif args.env.startswith('viz'):
+        import vizdoom.gym_wrapper
+        gym_id = 'VizdoomCorridor-v0'
+        # ['VizdoomBasic-v0', 'VizdoomCorridor-v0', 'VizdoomDefendCenter-v0', 'VizdoomDefendLine-v0',
+        # 'VizdoomHealthGathering-v0', 'VizdoomMyWayHome-v0', 'VizdoomPredictPosition-v0', 'VizdoomTakeCover-v0',
+        # 'VizdoomDeathmatch-v0', 'VizdoomHealthGatheringSupreme-v0']
     else:
         raise ValueError(f'unsupported env {args.env}')
 
@@ -60,8 +66,8 @@ if __name__ == "__main__":
     if args.test_ver is not None:
         agent = load_agent(args.agent, args.output_dir, args.test_ver)
         envs = get_envs(n_envs=args.test_envs, seed=args.seed, gym_id=gym_id,
-                        capture_video=args.video, output_dir=args.output_dir)
-        scores = test_agent(agent, envs, render=False, seed=args.seed, n_episodes=100)
+                        capture_video=args.video, output_dir=args.output_dir, no_vect=True)
+        scores = test_agent(agent, envs, render=True, seed=args.seed, n_episodes=100)
         avg_score = np.mean(scores)
         print(f'AVG SCORE: {avg_score:4.0f}')
         exit()

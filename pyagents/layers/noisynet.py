@@ -46,11 +46,11 @@ class NoisyLayer(tf.keras.layers.Layer):
         )
         self.reset_noise()
 
-    def reset_noise(self):
+    def reset_noise(self, stddev=0.5):
         def scale(x):
             return tf.sign(x) * tf.sqrt(tf.abs(x))
-        eps_in = tf.random.normal((self.sigma_w.shape[0],))
-        eps_out = tf.random.normal((self.units,))
+        eps_in = tf.random.normal((self.sigma_w.shape[0],), stddev=stddev)
+        eps_out = tf.random.normal((self.units,), stddev=stddev)
         eps_in = scale(eps_in)
         eps_out = scale(eps_out)
         self.eps_w = tf.tensordot(eps_in, eps_out, axes=0)  # outer product to get (in_shape, units) matrix

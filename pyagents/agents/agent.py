@@ -291,8 +291,9 @@ class Agent(tf.Module, abc.ABC):
         Subclasses must implement this function to enable custom WandB logging.
         """
         wandb.define_metric('train_step', summary="max")
-        wandb.define_metric('avg_return', step_metric="train_step", summary="max")
-        wandb.define_metric('avg_len', step_metric="train_step", summary="max")
+        wandb.define_metric('episode', summary="max")
+        wandb.define_metric('avg_return', step_metric="episode", summary="max")
+        wandb.define_metric('avg_len', step_metric="episode", summary="last")
 
     def _do_save_memories(self):
         pass
@@ -415,6 +416,8 @@ class Agent(tf.Module, abc.ABC):
         input_dict = cls.generate_input_config(agent_config, networks, load_mem, path)
 
         input_dict.update(kwargs)
+        # drop keys starting with buffer/
+        input_dict = {k: v for k, v in input_dict.items() if not k.startswith('buffer')}
         agent = cls(**input_dict)
         for name, (mean, var, count) in normalizers.items():
             agent.set_normalizer(name, mean, var, count)

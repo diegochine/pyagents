@@ -32,52 +32,21 @@ class QLayer(tf.keras.layers.Layer):
         self.action_shape = action_shape
         self.dueling = dueling
         self.dropout = bool(dropout is not None)
-        # hidden_initializer = tf.random_uniform_initializer(-0.1, 0.1)
-        # final_initializer = tf.random_uniform_initializer(-0.005, 0.005)
+        final_initializer = tf.random_uniform_initializer(-0.003, 0.003)
         if self.dueling:
-            self._value_fc = fc_layer(
-                units,
-                activation='relu',
-                # kernel_initializer=hidden_initializer,
-                # bias_initializer=tf.constant_initializer(0.1)
-            )
+            self._value_fc = fc_layer(units, activation='relu')
             if self.dropout:
                 self._value_dropout = tf.keras.layers.Dropout(rate=dropout)
-            self._value_head = fc_layer(
-                n,
-                activation=None,
-                # kernel_initializer=final_initializer,
-                # bias_initializer=tf.constant_initializer(0.1)
-            )
-            self._adv_fc = fc_layer(
-                units,
-                activation='relu',
-                # kernel_initializer=hidden_initializer,
-                # bias_initializer=tf.constant_initializer(0.1)
-            )
+            self._value_head = fc_layer(n, activation=None, kernel_initializer=final_initializer)
+            self._adv_fc = fc_layer(units, activation='relu' )
             if self.dropout:
                 self._adv_dropout = tf.keras.layers.Dropout(rate=dropout)
-            self._adv_head = fc_layer(
-                n * action_shape,
-                activation=None,
-                # kernel_initializer=final_initializer,
-                # bias_initializer=tf.constant_initializer(0.1)
-            )
+            self._adv_head = fc_layer(n * action_shape, activation=None, kernel_initializer=final_initializer)
         else:
-            self._dense = fc_layer(
-                units,
-                activation='relu',
-                # kernel_initializer=hidden_initializer,
-                # bias_initializer=tf.constant_initializer(0.1)
-            )
+            self._dense = fc_layer(units, activation='relu')
             if self.dropout:
                 self._dropout = tf.keras.layers.Dropout(rate=dropout)
-            self._qvals = fc_layer(
-                n * action_shape,
-                activation=None,
-                # kernel_initializer=final_initializer,
-                # bias_initializer=tf.constant_initializer(0.01)
-            )
+            self._qvals = fc_layer(n * action_shape, activation=None, kernel_initializer=final_initializer)
 
     def call(self, inputs, training=False, **kwargs):
         if self.dueling:

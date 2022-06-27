@@ -22,6 +22,8 @@ class PPO(OnPolicyAgent):
                  policy: Policy = None,
                  gamma: float = 0.99,
                  clip_eps: float = 0.2,
+                 normalize_obs: bool = True,
+                 reward_scaling: float = 1.0,
                  standardize: bool = True,
                  lam_gae: float = 0.9,
                  target_kl: float = 0.01,
@@ -63,8 +65,8 @@ class PPO(OnPolicyAgent):
                     name: (Optional) Name of the agent.
                     wandb_params: (Optional) Dict of parameters to enable WandB logging. Defaults to None.
                 """
-        super(PPO, self).__init__(state_shape, action_shape, lam_gae=lam_gae,
-                                  training=training, save_dir=save_dir, name=name,
+        super(PPO, self).__init__(state_shape, action_shape, lam_gae=lam_gae, normalize_obs=normalize_obs,
+                                  reward_scaling=reward_scaling, training=training, save_dir=save_dir, name=name,
                                   dtype=dtype)
         if actor_opt is None and training:
             raise ValueError('agent cannot be trained without optimizer')

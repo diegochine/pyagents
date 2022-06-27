@@ -14,6 +14,7 @@ class OffPolicyAgent(Agent, ABC):
                  state_shape: tuple,
                  action_shape: tuple,
                  training: bool,
+                 gamma: float = 0.99,
                  buffer: Optional[Buffer] = None,
                  normalize_obs: bool = True,
                  reward_scaling: float = 1.0,
@@ -41,6 +42,12 @@ class OffPolicyAgent(Agent, ABC):
             raise ValueError(f'unrecognized buffer param {buffer}')
         self._config.update({f'buffer/{k}': v for k, v in self._memory.get_config().items()})
 
+        self._gamma = gamma
+        # take into account eventual n_step returns
+        self._gamma_n = tf.constant(gamma ** self._memory.n_step_return, dtype=self.dtype)
+        self._config.update({'gamma': gamma})
+
+
     @property
     def on_policy(self):
         return False
@@ -66,7 +73,7 @@ class OffPolicyAgent(Agent, ABC):
     def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool, *args, **kwargs) -> None:
         """Saves piece of memory."""
         reward = reward * self.reward_scaling
-        self._memory.commit_stmemory((state, action, reward, next_state, done))
+        self._memory.commit_stmemory((state, action, reward, next_state, done), gamma=self._gamma)
 
     @abc.abstractmethod
     def _minibatch_to_tf(self, minibatch):

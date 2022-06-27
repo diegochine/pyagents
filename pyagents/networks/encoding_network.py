@@ -73,15 +73,16 @@ class EncodingNetwork(Network):
                 fc_layer = NoisyLayer
             else:
                 fc_layer = tf.keras.layers.Dense
-            assert len(fc_params) == len(dropout_params), f'params length do not match (fc: {len(fc_params)}, dropout: {len(dropout_params)})'
+            assert len(fc_params) == len(
+                dropout_params), f'params length do not match (fc: {len(fc_params)}, dropout: {len(dropout_params)})'
             for num_units, dropout in zip(fc_params, dropout_params):
                 kernel_regularizer = None  # if necessary sholud have wheight decay param as in tf
                 layers.append(fc_layer(
-                        units=num_units,
-                        activation=activation,
-                        kernel_initializer=kernel_initializer,
-                        kernel_regularizer=kernel_regularizer,
-                        dtype=dtype))
+                    units=num_units,
+                    activation=activation,
+                    kernel_initializer=kernel_initializer,
+                    kernel_regularizer=kernel_regularizer,
+                    dtype=dtype))
                 if dropout is not None:
                     layers.append(tf.keras.layers.Dropout(rate=dropout))
 

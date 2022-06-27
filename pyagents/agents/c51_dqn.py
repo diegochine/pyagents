@@ -32,7 +32,7 @@ class C51DQNAgent(DQNAgent):
                  tau: float = 1.0,
                  ddqn: bool = True,
                  buffer: Optional = 'uniform',
-                 gradient_clip_norm: Optional[float] = 0.5,
+                 gradient_clip_norm: Optional[float] = 1.0,
                  normalize_obs: bool = True,
                  reward_scaling: float = 1.0,
                  log_dict: dict = None,
@@ -124,6 +124,9 @@ class C51DQNAgent(DQNAgent):
                               {**self.config,
                                **{f'q_net/{k}': v for k, v in self._online_q_network.get_config().items()},
                                **log_dict})
+        # build networks
+        self._online_q_network(tf.ones((1, *state_shape)))
+        self._target_q_network(tf.ones((1, *state_shape)))
 
     def _wandb_define_metrics(self):
         super()._wandb_define_metrics()
