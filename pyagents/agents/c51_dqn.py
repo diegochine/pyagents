@@ -79,6 +79,7 @@ class C51DQNAgent(DQNAgent):
                                           epsilon_decay=epsilon_decay,
                                           epsilon_min=epsilon_min,
                                           target_update_period=target_update_period,
+                                          tau=tau,
                                           normalize_obs=normalize_obs,
                                           reward_scaling=reward_scaling,
                                           training=training,
@@ -93,7 +94,6 @@ class C51DQNAgent(DQNAgent):
         self._online_q_network = q_network
         self._target_q_network = deepcopy(self._online_q_network)
         self._target_update_period = target_update_period
-        self._tau = tau
         self._optimizer = optimizer
         self._train_step = 0
         self._ddqn = ddqn

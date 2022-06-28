@@ -340,7 +340,7 @@ def load_agent(algo, path, ver):
 
 @gin.configurable
 def get_envs(n_envs, gym_id, seed, capture_video, output_dir, frame_stack=4, async_envs=False, no_vect=False,
-             record_every=10):
+             record_every=10, rew_fn=lambda r: r):
     """Creates vectorized environments."""
 
     def make_env(gym_id, seed, idx, capture_video, output_dir):
@@ -365,7 +365,7 @@ def get_envs(n_envs, gym_id, seed, capture_video, output_dir, frame_stack=4, asy
 
             if gym_id.startswith('Viz'):
                 env = ObservationWrapper(env)
-                env = gym.wrappers.TransformReward(env, lambda r: r * 0.01)
+                env = gym.wrappers.TransformReward(env, lambda r: rew_fn(r))
 
             if frame_stack > 1:
                 env = gym.wrappers.FrameStack(env, num_stack=frame_stack)

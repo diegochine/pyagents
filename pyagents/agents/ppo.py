@@ -112,6 +112,10 @@ class PPO(OnPolicyAgent):
                                **log_dict})
         self._pi(tf.ones((1, *state_shape))), self._vf(tf.ones((1, *state_shape)))  # TODO remove
 
+    @property
+    def train_step(self) -> int:
+        return self._train_step_v  # in ppo, we train more the value function rather than the actor
+
     def _wandb_define_metrics(self):
         super()._wandb_define_metrics()
         wandb.define_metric('policy_loss', step_metric='train_step_pi', summary="min")
@@ -264,7 +268,8 @@ class PPO(OnPolicyAgent):
                               td_targets=targets_log,
                               avg_state_value=np.mean(values_log),
                               avg_td_target=np.mean(targets_log))
-                    self._log(do_log_step=True, critic_loss=loss_info['critic_loss'], train_step_v=self._train_step_v)
+                    self._log(do_log_step=True, critic_loss=loss_info['critic_loss'],
+                              train_step_v=self._train_step_v)
 
                 pi_losses.append(float(loss_info['policy_loss']))
                 v_losses.append(float(loss_info['critic_loss']))

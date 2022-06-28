@@ -89,10 +89,6 @@ class Agent(tf.Module, abc.ABC):
         return self._action_shape
 
     @property
-    def train_step(self) -> int:
-        return self._train_step
-
-    @property
     def config(self) -> dict:
         return self._config
 
@@ -294,6 +290,7 @@ class Agent(tf.Module, abc.ABC):
         wandb.define_metric('episode', summary="max")
         wandb.define_metric('avg_return', step_metric="episode", summary="max")
         wandb.define_metric('avg_len', step_metric="episode", summary="last")
+        wandb.define_metric('test/score', step_metric="train_step", summary="max")
 
     def _do_save_memories(self):
         pass

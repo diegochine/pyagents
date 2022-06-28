@@ -53,7 +53,7 @@ if __name__ == "__main__":
         gym_id = 'HalfCheetah-v3'
     elif args.env.startswith('viz'):
         import vizdoom.gym_wrapper
-        gym_id = 'VizdoomCorridor-v0'
+        gym_id = 'VizdoomDefendLine-v0'
         # ['VizdoomBasic-v0', 'VizdoomCorridor-v0', 'VizdoomDefendCenter-v0', 'VizdoomDefendLine-v0',
         # 'VizdoomHealthGathering-v0', 'VizdoomMyWayHome-v0', 'VizdoomPredictPosition-v0', 'VizdoomTakeCover-v0',
         # 'VizdoomDeathmatch-v0', 'VizdoomHealthGatheringSupreme-v0']
@@ -75,10 +75,10 @@ if __name__ == "__main__":
     listdir = sorted(os.listdir(args.config_dir))
     for cfg_file in listdir:
         gin.parse_config_file(os.path.join(args.config_dir, cfg_file))
+        out_dir = f'{args.output_dir}_{cfg_file.split(".")[0]}'
         train_envs = get_envs(n_envs=args.num_envs, seed=args.seed, gym_id=gym_id,
-                              capture_video=args.video, output_dir=args.output_dir)
+                              capture_video=args.video, output_dir=out_dir)
         test_envs = get_envs(n_envs=args.test_envs, seed=args.seed, gym_id=gym_id,
-                             capture_video=args.video, output_dir=args.output_dir)
-        agent = get_agent(args.agent, train_envs, output_dir=args.output_dir, gym_id=gym_id)
-        agent, scores = train_agent(agent, train_envs, test_envs, seed=args.seed, output_dir=args.output_dir)
-        agent.save(ver=-1)
+                             capture_video=args.video, output_dir=out_dir)
+        agent = get_agent(args.agent, train_envs, output_dir=out_dir, gym_id=gym_id)
+        agent, scores = train_agent(agent, train_envs, test_envs, seed=args.seed, output_dir=out_dir)
