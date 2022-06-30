@@ -279,20 +279,18 @@ def test_agent(agent, envs, seed, n_episodes, render=False):
         s_t = tf.expand_dims(s_t, axis=0)
         a_t = agent.act(s_t, training=False).actions[0]
         s_tp1, _, done, info = env.step(a_t)
-        s_t = s_tp1
         if done:
-            s_t = envs.reset()
+            s_tp1 = envs.reset()
         if "episode" in info.keys():
             score = [info['episode']['r']]
             episode = 1
-        return score, episode, s_t
+        return score, episode, s_tp1
 
     def vec_test(envs, s_t):
         episodes = 0
         scores = []
         a_t = agent.act(s_t, training=False).actions
-        s_tp1, _, d, info = envs.step(a_t)
-        s_t = s_tp1
+        s_tp1, _, _, info = envs.step(a_t)
         for single_step in info:
             if "episode" in single_step.keys():
                 scores.append(single_step['episode']['r'])
