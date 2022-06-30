@@ -72,9 +72,11 @@ class QRDQNAgent(DQNAgent):
                                          epsilon=epsilon,
                                          epsilon_decay=epsilon_decay,
                                          epsilon_min=epsilon_min,
+                                         ddqn=ddqn,
                                          target_update_period=target_update_period,
                                          normalize_obs=normalize_obs,
                                          reward_scaling=reward_scaling,
+                                         tau=tau,
                                          training=training,
                                          buffer=buffer,
                                          save_dir=save_dir,
@@ -87,10 +89,8 @@ class QRDQNAgent(DQNAgent):
         self._online_q_network = q_network
         self._target_q_network = deepcopy(self._online_q_network)
         self._target_update_period = target_update_period
-        self._tau = tau
         self._optimizer = optimizer
         self._train_step = 0
-        self._ddqn = ddqn
         self._gradient_clip_norm = gradient_clip_norm
         self._name = name
 

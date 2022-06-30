@@ -53,7 +53,14 @@ if __name__ == "__main__":
         gym_id = 'HalfCheetah-v3'
     elif args.env.startswith('viz'):
         import vizdoom.gym_wrapper
-        gym_id = 'VizdoomDefendLine-v0'
+        if 'l' in args.env:  # line
+            gym_id = 'VizdoomDefendLine-v0'
+        elif 'h' in args.env:  # health
+            gym_id = 'VizdoomHealthGathering-v0'
+        elif 'c' in args.env:  # center
+            gym_id = 'VizdoomDefendCenter-v0'
+        else:
+            raise ValueError(f'unrecognized vizdoom scenario {args.env}')
         # ['VizdoomBasic-v0', 'VizdoomCorridor-v0', 'VizdoomDefendCenter-v0', 'VizdoomDefendLine-v0',
         # 'VizdoomHealthGathering-v0', 'VizdoomMyWayHome-v0', 'VizdoomPredictPosition-v0', 'VizdoomTakeCover-v0',
         # 'VizdoomDeathmatch-v0', 'VizdoomHealthGatheringSupreme-v0']

@@ -31,12 +31,8 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
     if crit_start_learning_rate is None:
         crit_start_learning_rate = act_start_learning_rate
     if schedule:
-        act_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(act_start_learning_rate,
-                                                                          training_steps,
-                                                                          act_start_learning_rate / 1000)
-        crit_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(crit_start_learning_rate,
-                                                                           training_steps,
-                                                                           crit_start_learning_rate / 1000)
+        act_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(act_start_learning_rate, training_steps, 0.)
+        crit_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(crit_start_learning_rate, training_steps, 0.)
     else:
         act_learning_rate = act_start_learning_rate
         crit_learning_rate = crit_start_learning_rate
@@ -216,12 +212,13 @@ def train_agent(agent, train_envs, test_env=None, train_step_fn=None, training_s
     else:
         init_params = {}
 
-    scores = []
     training_step = 0
     best_score = float('-inf')
-    k = 0
+    k = 1
     avg_r, avg_l = None, None
     episodes = 0
+    scores = test_agent(agent, test_env, seed=seed, n_episodes=test_rounds, render=False)
+    wandb.log({'train_step': 0, 'test/score': np.mean(scores)})
     print(f'{"*" * 42}\nSTARTING TRAINING\n{"*" * 42}')
     with tqdm(total=training_steps) as pbar:
         pbar.set_description('INITIALIZING')
