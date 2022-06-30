@@ -119,7 +119,8 @@ class SAC(OffPolicyAgent):
     def alpha(self):
         return tf.exp(tf.stop_gradient(self._log_alpha))
 
-    def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool, *args, **kwargs) -> None:
+    def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool, *args,
+                 **kwargs) -> None:
         if 'reward' in self.normalizers:
             self.update_normalizer('reward', reward)
         super().remember(state, action, reward, next_state, done, *args, **kwargs)
@@ -201,6 +202,8 @@ class SAC(OffPolicyAgent):
             critic_loss_info[f'critic{i + 1}_loss'] = critic_loss
             critic_loss_info[f'critic{i + 1}_td_loss'] = info['critic_td_loss']
             critic_loss_info[f'q{i + 1}'] = info['q']
+            critic_loss_info[f'critic{i + 1}_grad_vars'] = critic_grads_and_vars
+            critic_loss_info[f'critic{i + 1}_norm'] = critic_norm
         # use computed loss to update memories priorities (when using a prioritized buffer) TODO verify
         critic_td_loss = 0.5 * is_weights * tf.squeeze(
             critic_loss_info['critic1_td_loss'] + critic_loss_info['critic2_td_loss'])
@@ -221,6 +224,11 @@ class SAC(OffPolicyAgent):
                     - tf.exp(self._log_alpha) * (tf.stop_gradient(logprobs + self.target_entropy)))
             alpha_grads_and_vars, alpha_norm = self._apply_gradients(alpha_loss, self._alpha_opt,
                                                                      [self._log_alpha], alpha_tape)
+            alpha_grads_log = {f'alpha/{".".join(var.name.split("/"))}': grad.numpy()
+                               for grad, var in alpha_grads_and_vars}
+            alpha_grads_log['alpha/norm'] = alpha_norm
+        else:
+            alpha_grads_log = {}
 
         if self._train_step % self.target_update_period == 0:
             for o, t in zip([self._online_critic1, self._online_critic2], [self._target_critic1, self._target_critic2]):
@@ -241,12 +249,17 @@ class SAC(OffPolicyAgent):
             if self._log_gradients:
                 pi_grads_log = {f'actor/{".".join(var.name.split("/")[1:])}': grad.numpy()
                                 for grad, var in actor_grads_and_vars}
-                critic1_grads_log = {f'critic/{".".join(var.name.split("/")[1:])}': grad.numpy()
-                                     for grad, var in critic_grads_and_vars}
+                critic1_grads_log = {f'critic1/{".".join(var.name.split("/")[1:])}': grad.numpy()
+                                     for grad, var in critic_loss_info[f'critic1_grad_vars']}
+                critic2_grads_log = {f'critic2/{".".join(var.name.split("/")[1:])}': grad.numpy()
+                                     for grad, var in critic_loss_info[f'critic2_grad_vars']}
                 if self._gradient_clip_norm is not None:
                     pi_grads_log['actor/norm'] = actor_norm
-                    critic1_grads_log['critic/norm'] = critic_norm
-                self._log(do_log_step=False, prefix='gradients', **pi_grads_log, **critic1_grads_log)
+                    critic1_grads_log['critic1/norm'] = critic_loss_info[f'critic1_norm']
+                    critic1_grads_log['critic2/norm'] = critic_loss_info[f'critic2_norm']
+                self._log(do_log_step=False, prefix='gradients', **pi_grads_log, **critic1_grads_log,
+                          **critic2_grads_log, **alpha_grads_log)
+
             state_values = tf.minimum(critic_loss_info['q1'], critic_loss_info['q2']).numpy()
             self._log(do_log_step=False, prefix='debug', state_values=state_values, td_targets=targets.numpy(),
                       alpha=float(self.alpha))
