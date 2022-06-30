@@ -42,7 +42,9 @@ def make_env(gym_id, seed, idx, capture_video, output_dir, test=False):
     return thunk
 
 @gin.configurable
-def init_training(args, gym_id, num_envs=1):
+def init_training(args, gym_id='Hopper-v2', num_envs=1):
+    if not args.output_dir:
+        args.output_dir = f'output/{args.agent}-{gym_id.replace("/", "-")}'
     seeds = [args.seed + i for i in range(num_envs * 2)]
     train_envs = gym.vector.SyncVectorEnv(
         [make_env(gym_id, seeds[i], i, False, args.output_dir)
@@ -61,7 +63,7 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--config-dir', type=str, default='', help='path to dir containing gin config file')
     parser.add_argument('-tv', '--test-ver', type=int, default=None,
                         help='if -1, use final version; if >=0, performs evaluation using this version')
-    parser.add_argument('-e', '--env', type=str, default='cartpole',
+    parser.add_argument('-e', '--env', type=str, default=None,
                         help='env to use, choices: cartpole, pendulum, bipedalwalker')
     parser.add_argument('-n', '--num-envs', type=int, default=None,
                         help='number of parallel envs for vectorized environment')
@@ -72,32 +74,35 @@ if __name__ == "__main__":
     parser.add_argument('--video', action=argparse.BooleanOptionalAction, default=False,
                         help='number of parallel envs for vectorized environment')
     args = parser.parse_args()
-    args.env = args.env.lower()
-    if args.env.startswith('a'):
-        gym_id = 'Acrobot-v1'
-    elif args.env.startswith('bi'):
-        gym_id = 'BipedalWalker-v3'
-    elif args.env.startswith('br'):
-        gym_id = 'ALE/Breakout-ram'
-    elif args.env.startswith('c'):
-        gym_id = 'CartPole-v1'
-    elif args.env.startswith('l'):
-        gym_id = 'LunarLander-v2'
-    elif args.env.startswith('p'):
-        gym_id = 'Pendulum-v1'
-    elif args.env.startswith('wa'):
-        gym_id = 'Walker2d-v2'
-    elif args.env.startswith('ha'):
-        gym_id = 'HalfCheetah-v3'
-    elif args.env.startswith('ho'):
-        gym_id = 'Hopper-v2'
+    if args.env is not None:
+        args.env = args.env.lower()
+        if args.env.startswith('a'):
+            gym_id = 'Acrobot-v1'
+        elif args.env.startswith('bi'):
+            gym_id = 'BipedalWalker-v3'
+        elif args.env.startswith('br'):
+            gym_id = 'ALE/Breakout-ram'
+        elif args.env.startswith('c'):
+            gym_id = 'CartPole-v1'
+        elif args.env.startswith('l'):
+            gym_id = 'LunarLander-v2'
+        elif args.env.startswith('p'):
+            gym_id = 'Pendulum-v1'
+        elif args.env.startswith('wa'):
+            gym_id = 'Walker2d-v2'
+        elif args.env.startswith('ha'):
+            gym_id = 'HalfCheetah-v3'
+        elif args.env.startswith('ho'):
+            gym_id = 'Hopper-v2'
+        else:
+            raise ValueError(f'unsupported env {args.env}')
     else:
-        raise ValueError(f'unsupported env {args.env}')
-
-    if not args.output_dir:
-        args.output_dir = f'output/{args.agent}-{gym_id.replace("/", "-")}'
+        gym_id = None
 
     if args.test_ver is not None:
+        assert gym_id is not None
+        if not args.output_dir:
+            args.output_dir = f'output/{args.agent}-{gym_id.replace("/", "-")}'
         agent = load_agent(args.agent, args.output_dir, args.test_ver)
         envs = gym.vector.SyncVectorEnv(
             [make_env(gym_id, (args.seed * (3 * i)) ** 2, i, True, args.output_dir, test=True)
@@ -112,6 +117,12 @@ if __name__ == "__main__":
     for cfg_file in listdir:
         gin.parse_config_file(os.path.join(args.config_dir, cfg_file))
         if args.num_envs is not None:
-            init_training(args, gym_id, args.num_envs)
+            if gym_id is not None:
+                init_training(args, gym_id, args.num_envs)
+            else:
+                init_training(args, num_envs=args.num_envs)
         else:
-            init_training(args, gym_id)
+            if gym_id is not None:
+                init_training(args, gym_id)
+            else:
+                init_training(args)
