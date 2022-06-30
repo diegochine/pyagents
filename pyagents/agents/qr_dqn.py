@@ -73,6 +73,8 @@ class QRDQNAgent(DQNAgent):
                                          epsilon_decay=epsilon_decay,
                                          epsilon_min=epsilon_min,
                                          target_update_period=target_update_period,
+                                         tau=tau,
+                                         ddqn=ddqn,
                                          normalize_obs=normalize_obs,
                                          reward_scaling=reward_scaling,
                                          training=training,
@@ -90,7 +92,6 @@ class QRDQNAgent(DQNAgent):
         self._tau = tau
         self._optimizer = optimizer
         self._train_step = 0
-        self._ddqn = ddqn
         self._gradient_clip_norm = gradient_clip_norm
         self._name = name
 
