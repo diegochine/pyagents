@@ -11,7 +11,7 @@ import gin
 from pyagents.utils.training_utils import test_agent, get_agent, load_agent
 
 
-def make_env(gym_id, seed, idx, capture_video, output_dir):
+def make_env(gym_id, seed, idx, capture_video, output_dir, test=False):
     from pyagents.utils.training_utils import reset_random_seed
     reset_random_seed(seed)
 
@@ -23,7 +23,12 @@ def make_env(gym_id, seed, idx, capture_video, output_dir):
             env_args = dict(full_action_space=False,  # reduced action space for easier learning
                             )
         env = gym.make(gym_id, **env_args)
-        # env = gym.wrappers.TimeLimit(env, max_episode_steps=env.spec.max_episode_steps-1)
+        if gym_id.startswith('Bipedal'):
+            max_step = 800
+        else:
+            max_step = env.spec.max_episode_steps-1
+        if not test:
+            env = gym.wrappers.TimeLimit(env, max_episode_steps=max_step)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         if capture_video and idx == 0:
             if not os.path.isdir(f"{output_dir}/videos"):
@@ -36,6 +41,19 @@ def make_env(gym_id, seed, idx, capture_video, output_dir):
 
     return thunk
 
+@gin.configurable
+def init_training(args, gym_id, num_envs=1):
+    seeds = [args.seed + i for i in range(num_envs * 2)]
+    train_envs = gym.vector.SyncVectorEnv(
+        [make_env(gym_id, seeds[i], i, False, args.output_dir)
+         for i in range(num_envs)])
+    test_envs = gym.vector.SyncVectorEnv(
+        [make_env(gym_id, seeds[i % num_envs], i, args.video, args.output_dir, test=True)
+         for i in range(100)])  # test for 100 runs
+    agent = get_agent(args.agent, train_envs, output_dir=args.output_dir, gym_id=gym_id)
+    agent, scores = train_agent(agent, train_envs, test_envs, output_dir=args.output_dir)
+    agent.save(ver=-1)
+
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Script for training a sample agent on Gym")
@@ -45,7 +63,7 @@ if __name__ == "__main__":
                         help='if -1, use final version; if >=0, performs evaluation using this version')
     parser.add_argument('-e', '--env', type=str, default='cartpole',
                         help='env to use, choices: cartpole, pendulum, bipedalwalker')
-    parser.add_argument('-n', '--num-envs', type=int, default=1,
+    parser.add_argument('-n', '--num-envs', type=int, default=None,
                         help='number of parallel envs for vectorized environment')
     parser.add_argument('-o', '--output-dir', type=str, default='',
                         help='directory where to store trained agent(s)')
@@ -82,7 +100,7 @@ if __name__ == "__main__":
     if args.test_ver is not None:
         agent = load_agent(args.agent, args.output_dir, args.test_ver)
         envs = gym.vector.SyncVectorEnv(
-            [make_env(gym_id, (args.seed * (3 * i)) ** 2, i, True, args.output_dir)
+            [make_env(gym_id, (args.seed * (3 * i)) ** 2, i, True, args.output_dir, test=True)
              for i in range(100)])  # test for 100 runs
         scores = test_agent(agent, envs, render=False)
         avg_score = np.mean(scores)
@@ -93,13 +111,7 @@ if __name__ == "__main__":
     listdir.sort()
     for cfg_file in listdir:
         gin.parse_config_file(os.path.join(args.config_dir, cfg_file))
-        seeds = [args.seed for i in range(args.num_envs)]
-        train_envs = gym.vector.SyncVectorEnv(
-            [make_env(gym_id, seeds[i], i, False, args.output_dir)
-             for i in range(args.num_envs)])
-        test_envs = gym.vector.SyncVectorEnv(
-            [make_env(gym_id, seeds[i % args.num_envs], i, args.video, args.output_dir)
-             for i in range(100)])  # test for 100 runs
-        agent = get_agent(args.agent, train_envs, output_dir=args.output_dir, gym_id=gym_id)
-        agent, scores = train_agent(agent, train_envs, test_envs, output_dir=args.output_dir)
-        agent.save(ver=-1)
+        if args.num_envs is not None:
+            init_training(args, gym_id, args.num_envs)
+        else:
+            init_training(args, gym_id)
