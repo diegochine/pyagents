@@ -66,7 +66,11 @@ class OffPolicyAgent(Agent, ABC):
                 a_t = np.random.choice(actions, 1)
             else:
                 a_t = envs.action_space.sample()
-            s_tp1, r_t, done, _ = envs.step(a_t)
+            s_tp1, r_t, done, info = envs.step(a_t)
+            for i, single_step in enumerate(info):
+                # handle TimeLimit wrapper
+                if 'TimeLimit.truncated' in single_step:
+                    done[i] = not info[i]['TimeLimit.truncated']
             self.remember(s_t, a_t, r_t, s_tp1, done)
             s_t = s_tp1
 

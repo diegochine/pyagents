@@ -22,7 +22,7 @@ def get_optimizer(learning_rate=0.001):
 
 @gin.configurable
 def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='uniform',
-              crit_start_learning_rate=None, schedule=True, wandb_params=None, gym_id=None, training_steps=10 ** 5,
+              crit_start_learning_rate=None, alpha_start_learning_rate=None, schedule=True, wandb_params=None, gym_id=None, training_steps=10 ** 5,
               log_dict=None):
     if log_dict is None:
         log_dict = dict()
@@ -30,12 +30,16 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
 
     if crit_start_learning_rate is None:
         crit_start_learning_rate = act_start_learning_rate
+    if alpha_start_learning_rate is None:
+        alpha_start_learning_rate = act_start_learning_rate
     if schedule:
         act_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(act_start_learning_rate, training_steps, 0.)
         crit_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(crit_start_learning_rate, training_steps, 0.)
+        alpha_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(alpha_start_learning_rate, training_steps, 0.)
     else:
         act_learning_rate = act_start_learning_rate
         crit_learning_rate = crit_start_learning_rate
+        alpha_learning_rate = alpha_start_learning_rate
 
     if isinstance(env, gym.vector.VectorEnv):
         state_shape = env.single_observation_space.shape
@@ -125,6 +129,28 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
                             actor_opt=a_opt, critic_opt=c_opt,
                             action_bounds=bounds, name='ddpg', wandb_params=wandb_params, save_dir=output_dir,
                             log_dict=log_dict)
+    elif algo == 'sac':
+        assert isinstance(action_space, gym.spaces.Box), 'sac only works in continuous spaces'
+        action_shape = action_space.shape
+        bounds = (action_space.low, action_space.high)
+
+        a_net = networks.PolicyNetwork(state_shape, action_shape, output='gaussian', bounds=bounds,
+                                       activation='relu', out_params={'state_dependent_std': True,
+                                                                      'mean_activation': None})
+        q1_net = networks.QNetwork(state_shape=state_shape, action_shape=action_shape)
+        q2_net = networks.QNetwork(state_shape=state_shape, action_shape=action_shape)
+        a_opt = get_optimizer(learning_rate=act_learning_rate)
+        c1_opt = get_optimizer(learning_rate=crit_learning_rate)
+        c2_opt = get_optimizer(learning_rate=crit_learning_rate)
+        alpha_opt = get_optimizer(learning_rate=alpha_learning_rate)
+
+        agent = agents.SAC(state_shape, action_shape, actor=a_net, buffer=buffer,
+                           critic=q1_net, actor_opt=a_opt, critic1_opt=c1_opt,
+                           critic2=q2_net, critic2_opt=c2_opt,
+                           alpha_opt=alpha_opt, wandb_params=wandb_params, save_dir=output_dir,
+                           log_dict={'actor_learning_rate': act_start_learning_rate,
+                                     'critic_learning_rate': crit_start_learning_rate,
+                                     'alpha_learning_rate': alpha_start_learning_rate})
     else:
         raise ValueError(f'unsupported algorithm {algo}')
     return agent
@@ -328,6 +354,8 @@ def load_agent(algo, path, ver):
         agent = agents.PPO.load(path, ver=ver, training=False)
     elif algo == 'qrdqn':
         agent = agents.QRDQNAgent.load(path, ver=ver, training=False)
+    elif algo == 'sac':
+        agent = agents.SAC.load(path, ver=ver, training=False)
     else:
         raise ValueError(f'unsupported algorithm {algo}')
     return agent

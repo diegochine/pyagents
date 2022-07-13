@@ -14,6 +14,7 @@ Currently, the following algorithms have been implemented:
 * [C51: A Distributional Perspective on Reinforcement Learning](https://arxiv.org/abs/1707.06887)
 * [QRDQN: Distributional Reinforcement Learning with Quantile Regression](https://arxiv.org/abs/1710.10044)
 * [DDPG: Continuous control with deep reinforcement learning](https://arxiv.org/abs/1509.02971)
+* [SAC: Soft Actor-Critic Algorithms and Applications](https://arxiv.org/abs/1812.05905)
 
 * [PER: Prioritized Experience Replay (Schaul et al., 2016)](https://arxiv.org/abs/1511.05952)
 
