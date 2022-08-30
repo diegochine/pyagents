@@ -5,7 +5,7 @@ import tensorflow_probability as tfp
 
 class GaussianLayer(tf.keras.layers.Layer):
     def __init__(self, state_shape, action_shape, bounds, deterministic=False, mean_activation='tanh',
-                 start_std=0.5, std_eps=0.01, state_dependent_std=False, name='Gaussian', dtype=tf.float32, **kwargs):
+                 start_std=0.5, std_eps=0.01, state_dependent_std=True, name='Gaussian', dtype=tf.float32, **kwargs):
         super(GaussianLayer, self).__init__(name=name, dtype=dtype, **kwargs)
         self._state_shape = state_shape
         self._action_shape = action_shape

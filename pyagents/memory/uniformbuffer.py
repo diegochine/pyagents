@@ -21,7 +21,7 @@ class UniformBuffer(Buffer):
         self._config = {'size': size, 'n_step_return': n_step_return, 'type': 'uniform'}
 
     def __len__(self):
-        return len(self.ltmemory)
+        return len(self._ltmemory)
 
     @property
     def n_step_return(self):

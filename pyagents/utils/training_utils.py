@@ -362,7 +362,7 @@ def load_agent(algo, path, ver):
 
 
 @gin.configurable
-def get_envs(n_envs, gym_id, seed, capture_video, output_dir, frame_stack=4, async_envs=False, no_vect=False,
+def get_envs(n_envs, gym_id, seed, capture_video, output_dir, frame_stack=1, async_envs=False, no_vect=False,
              record_every=10, rew_fn=lambda r: r):
     """Creates vectorized environments."""
 

@@ -14,7 +14,7 @@ train_agent.update_rounds = 64
 train_agent.batch_size = 256
 train_agent.init_params = {"min_memories": 10000}
 
-UniformBuffer.size_long = 300000
+UniformBuffer.size = 300000
 
 PolicyNetwork.fc_params = (400, 300)
 QNetwork.fc_params = (400, 300)

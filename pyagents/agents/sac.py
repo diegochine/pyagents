@@ -109,7 +109,7 @@ class SAC(OffPolicyAgent):
                                **log_dict})
 
         ones = tf.ones((1, *state_shape))
-        a = self._actor(ones).action
+        a = self._actor(ones).actions
         self._online_critic1((ones, a))
         self._target_critic1((ones, a))
         self._online_critic2((ones, a))
@@ -165,7 +165,7 @@ class SAC(OffPolicyAgent):
     def _loss_pi(self, states) -> dict:
         # alpha log pi - q due to gradient ascent
         act_out = self._actor(states)
-        actions = act_out.action
+        actions = act_out.actions
         logprobs = act_out.logprobs
 
         q = tf.reduce_mean([self._online_critic1((states, actions)).critic_values,
@@ -174,7 +174,6 @@ class SAC(OffPolicyAgent):
         return {'act_loss': act_loss, 'logprobs': logprobs}
 
     def _train(self, batch_size: int, update_rounds: int, *args, **kwargs) -> dict:
-        self._memory.commit_ltmemory()
         assert self._training, 'called train function while in evaluation mode, call toggle_training() before'
         assert len(self._memory) > batch_size, f'batch size bigger than amount of memories'
         memories, indexes, is_weights = self._memory.sample(batch_size, vectorizing_fn=self._minibatch_to_tf)
@@ -184,7 +183,7 @@ class SAC(OffPolicyAgent):
 
         # compute targets
         act_out = self._actor(next_states)
-        next_action = act_out.action
+        next_action = act_out.actions
         q1_target = self._target_critic1((next_states, next_action)).critic_values
         q2_target = self._target_critic2((next_states, next_action)).critic_values
         targets = self.reward_scale * rewards + self.gamma * (1 - dones) * (
