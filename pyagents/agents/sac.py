@@ -32,7 +32,7 @@ class SAC(OffPolicyAgent):
                  gamma: float = 0.99,
                  standardize: bool = True,
                  reward_normalization: bool = True,
-                 reward_scale: float = 1.,
+                 reward_scaling: float = 1.,
                  target_update_period: int = 500,
                  tau: float = 1.0,
                  initial_alpha: float = 1.,
@@ -87,7 +87,7 @@ class SAC(OffPolicyAgent):
         self.target_entropy = target_entropy if target_entropy else -np.prod(self.action_shape)
         if reward_normalization:
             self.init_normalizer('reward', (1,))
-        self.reward_scale = reward_scale
+        self.reward_scale = reward_scaling
         self.config.update({'gamma': self.gamma,
                             'tau': self.tau,
                             'target_update_period': self.target_update_period,
@@ -97,7 +97,7 @@ class SAC(OffPolicyAgent):
                             'target_entropy': self.target_entropy,
                             'initial_alpha': self._initial_alpha,
                             'train_alpha': train_alpha,
-                            'reward_scale': reward_scale})
+                            'reward_scaling': reward_scaling})
 
         if wandb_params:
             self._init_logger(wandb_params,
