@@ -197,6 +197,10 @@ class Agent(tf.Module, abc.ABC):
         self._wandb_define_metrics()
         self._log_dict = {}
         self.is_logging = True
+        # FIXME off policy agent should also update buffer save dir
+        self._save_dir = os.path.join(self._save_dir, self._wandb_run.name)
+        if not os.path.isdir(self._save_dir):
+            os.makedirs(self._save_dir)
 
     def init(self, envs, env_config=None, *args, **kwargs):
         """Performs additional initialization, such as collecting memories for off-policy agents"""
