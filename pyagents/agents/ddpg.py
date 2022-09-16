@@ -184,7 +184,7 @@ class DDPG(OffPolicyAgent):
         return [('ac', self._ac.get_config(), self._ac.get_weights())]
 
     @staticmethod
-    def networks_name() -> List[tuple]:
+    def networks_name(config: dict) -> List[tuple]:
         return [('ac', ACNetwork)]
 
     @staticmethod

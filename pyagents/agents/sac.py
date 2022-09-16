@@ -282,7 +282,7 @@ class SAC(OffPolicyAgent):
                 ('critic2', self._online_critic2.get_config(), self._online_critic2.get_weights())]
 
     @staticmethod
-    def networks_name() -> List[tuple]:
+    def networks_name(config: dict) -> List[tuple]:
         return [('actor', PolicyNetwork),
                 ('critic1', QNetwork),
                 ('critic2', QNetwork)]

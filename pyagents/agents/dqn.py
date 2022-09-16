@@ -235,7 +235,7 @@ class DQNAgent(OffPolicyAgent):
         return [('q_net', net_config, net_weights)]
 
     @staticmethod
-    def networks_name() -> List[tuple]:
+    def networks_name(config: dict) -> List[tuple]:
         return [('q_net', DiscreteQNetwork)]
 
     @staticmethod

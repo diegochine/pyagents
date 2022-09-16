@@ -209,5 +209,5 @@ class C51DQNAgent(DQNAgent):
         return [states_batch, action_batch, reward_batch, next_states_batch, done_batch]
 
     @staticmethod
-    def networks_name() -> List[tuple]:
+    def networks_name(config: dict) -> List[tuple]:
         return [('q_net', C51QNetwork)]

@@ -363,7 +363,7 @@ class Agent(tf.Module, abc.ABC):
 
     @staticmethod
     @abc.abstractmethod
-    def networks_name() -> List[tuple]:
+    def networks_name(config: dict) -> List[tuple]:
         """ Returns a list of tuples (name, class)
             for each network that needs to be loaded from storage."""
         raise NotImplementedError('Must implement networks_name method to enable WandB logging.')
@@ -388,7 +388,7 @@ class Agent(tf.Module, abc.ABC):
             agent_config[k] = v
 
         networks = {}
-        for net_name, net_class in cls.networks_name():
+        for net_name, net_class in cls.networks_name(agent_config):
             net_config = {}
             net_config_group = f[f'{net_name}_config']
             Agent.read_nested_groups(net_config, net_config_group)

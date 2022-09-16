@@ -161,7 +161,7 @@ class A2C(OnPolicyAgent):
         return [('actor_critic', net_config, net_weights)]
 
     @staticmethod
-    def networks_name() -> List[tuple]:
+    def networks_name(config: dict) -> List[tuple]:
         return [('actor_critic', SharedBackboneACNetwork)]
 
     @staticmethod

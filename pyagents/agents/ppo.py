@@ -288,7 +288,7 @@ class PPO(OnPolicyAgent):
         return a
 
     @staticmethod
-    def networks_name() -> List[tuple]:
+    def networks_name(config: dict) -> List[tuple]:
         return [('actor_net', PolicyNetwork), ('critic_net', ValueNetwork)]
 
     @staticmethod
