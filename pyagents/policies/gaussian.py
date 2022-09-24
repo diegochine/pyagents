@@ -15,10 +15,15 @@ class GaussianPolicy(Policy):
                  bounds: tuple = (-np.inf, np.inf)):
         super().__init__(state_shape, action_shape)
         self._policy_network = policy_network
+        self._bounds = bounds
 
     @property
     def is_discrete(self):
         return False
+
+    @property
+    def bounds(self):
+        return self._bounds
 
     def _act(self, obs, deterministic=False, mask=None, training=True):
         pi_out = self._policy_network(obs, training=training)

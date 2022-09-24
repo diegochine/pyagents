@@ -23,6 +23,10 @@ class DirichletPolicy(Policy):
     def is_discrete(self):
         return False
 
+    @property
+    def bounds(self):
+        return self._bounds
+
     def _act(self, obs, deterministic=False, mask=None, training=True):
         alpha = self._policy_network(obs.reshape(1, *obs.shape)).dist_params
         alpha = alpha.numpy()

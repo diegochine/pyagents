@@ -25,6 +25,10 @@ class NormalNoisePolicy(Policy):
     def is_discrete(self):
         return self._policy.is_discrete
 
+    @property
+    def bounds(self):
+        return self._bounds
+
     def _act(self, obs, mask=None, training=True, **kwargs):
         action = self._policy.act(obs, mask=mask, training=training).actions
         if training:

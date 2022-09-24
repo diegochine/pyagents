@@ -14,16 +14,20 @@ class FixedPolicy(Policy):
                  bounds: tuple = None):
         super(FixedPolicy, self).__init__(state_shape, action_shape)
         self._policy_network = policy_network
-        self.bounds = bounds
+        self._bounds = bounds
 
     @property
     def is_discrete(self):
         return False
-    
+
+    @property
+    def bounds(self):
+        return self._bounds
+
     def _act(self, obs, **kwargs):
         action = self._policy_network(obs, **kwargs).action
-        if self.bounds is not None:
-            action = np.clip(action, self.bounds[0], self.bounds[1])
+        if self._bounds is not None:
+            action = np.clip(action, self._bounds[0], self._bounds[1])
         return PolicyOutput(actions=action)
 
     def log_prob(self, output, action):
