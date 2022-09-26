@@ -15,14 +15,14 @@ class QNetwork(Network):
                  obs_conv_params=None, obs_fc_params=None, obs_dropout_params=None, obs_activation='relu',
                  act_fc_params=None, act_dropout_params=None, act_activation='relu',
                  fc_params=(64, 64), dropout_params=None, activation='relu',
-                 init: bool = True, name='QNetwork', trainable=True, dtype: str = 'float32', dueling=False):
+                 do_init: bool = True, name='QNetwork', trainable=True, dtype: str = 'float32', dueling=False):
         super().__init__(name=name, trainable=trainable, dtype=dtype)
         self._config = {'state_shape': state_shape,
                         'action_shape': action_shape,
                         'dueling': dueling,
                         'name': name,
                         'dtype': dtype,
-                        'init': init,
+                        'do_init': do_init,
                         'obs_conv_params': obs_conv_params,
                         'obs_fc_params': obs_fc_params,
                         'obs_dropout_params': obs_dropout_params,
@@ -45,7 +45,7 @@ class QNetwork(Network):
                 dropout_params=obs_dropout_params,
                 activation=obs_activation,
                 name="obs_encoder",
-                init=init,
+                do_init=do_init,
                 dtype=dtype
             )
             shared_obs_input = obs_fc_params[-1]
@@ -61,7 +61,7 @@ class QNetwork(Network):
                 dropout_params=act_dropout_params,
                 activation=act_activation,
                 name="act_encoder",
-                init=init,
+                do_init=do_init,
                 dtype=dtype)
             shared_act_input = act_fc_params[-1]
 
@@ -72,11 +72,11 @@ class QNetwork(Network):
             dropout_params=dropout_params,
             activation=activation,
             name="shared_encoder",
-            init=init,
+            do_init=do_init,
             dtype=dtype
         )
         self._q_layer = QLayer(1, units=fc_params[-1], dropout=dropout_params, dueling=dueling, dtype=dtype)
-        if init:
+        if do_init:
             self((tf.ones((1, *state_shape)), tf.ones((1, *action_shape))))
 
     def call(self, inputs, training=False, mask=None):

@@ -23,7 +23,7 @@ class PolicyNetwork(Network):
                  activation: str = 'tanh',
                  out_params: Optional[dict] = None,
                  bounds: Optional[tuple] = None,
-                 init: bool = True,
+                 do_init: bool = True,
                  name: str = 'PolicyNetwork',
                  trainable: bool = True,
                  dtype: str = 'float32'):
@@ -56,7 +56,7 @@ class PolicyNetwork(Network):
                         'activation': activation,
                         'output': output,
                         'out_params': out_params,
-                        'init': init,
+                        'do_init': do_init,
                         'name': name,
                         'dtype': dtype}
         if out_params is None:
@@ -70,7 +70,7 @@ class PolicyNetwork(Network):
                 fc_params=fc_params,
                 dropout_params=dropout_params,
                 activation=activation,
-                init=init,
+                do_init=do_init,
             )
         assert bounds is None or len(bounds) == 2, f'wrong bounds param: {bounds}'
         if bounds is not None:
@@ -91,7 +91,7 @@ class PolicyNetwork(Network):
             self._out_layer = SoftmaxLayer(features_shape, action_shape, **out_params)
         else:
             raise ValueError(f'unknown output type {output}')
-        if init:
+        if do_init:
             self(tf.ones((1, *state_shape)))
 
     def get_policy(self, caller=None):
