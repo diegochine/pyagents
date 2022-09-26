@@ -19,6 +19,7 @@ class DiscreteQNetwork(Network):
                  dueling=True,
                  noisy_layers=False,
                  activation='relu',
+                 init: bool = True,
                  name='QNetwork',
                  trainable=True,
                  dtype: str = 'float32'):
@@ -31,6 +32,7 @@ class DiscreteQNetwork(Network):
                         'activation': activation,
                         'noisy_layers': noisy_layers,
                         'dueling': dueling,
+                        'init': init,
                         'name': name,
                         'dtype': dtype}
         self._encoder = EncodingNetwork(
@@ -49,7 +51,8 @@ class DiscreteQNetwork(Network):
                                dueling=dueling,
                                noisy_layers=noisy_layers,
                                dtype=dtype)
-        self(tf.ones((1, *state_shape)))
+        if init:
+            self(tf.ones((1, *state_shape)))
 
     @property
     def noisy_layers(self):

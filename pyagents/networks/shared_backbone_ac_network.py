@@ -21,6 +21,7 @@ class SharedBackboneACNetwork(Network):
                  dropout_params=None,
                  activation='relu',
                  bounds=None,
+                 init: bool = True,
                  name='ActorCriticNetwork',
                  trainable=True,
                  dtype: str = 'float32'):
@@ -31,6 +32,7 @@ class SharedBackboneACNetwork(Network):
                         'fc_params': fc_params if fc_params else [],
                         'dropout_params': dropout_params if dropout_params else [],
                         'activation': activation,
+                        'init': init,
                         'name': name,
                         'dtype': dtype,
                         'bounds': bounds,
@@ -41,6 +43,7 @@ class SharedBackboneACNetwork(Network):
             fc_params=fc_params,
             dropout_params=dropout_params,
             activation=activation,
+            init=init,
             dtype=dtype
         )
         features_shape = (fc_params[-1],)  # output shape from encoder
@@ -49,9 +52,11 @@ class SharedBackboneACNetwork(Network):
                                           output=output,
                                           fc_params=None,
                                           bounds=bounds,
+                                          init=init,
                                           dtype=dtype)
         self._critic_head = ValueNetwork(state_shape=features_shape,
                                          fc_params=None,
+                                         init=init,
                                          dtype=dtype)
 
     def get_policy(self):

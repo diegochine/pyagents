@@ -21,6 +21,7 @@ class C51QNetwork(Network):
                  noisy_layers=False,
                  support=None,
                  activation='relu',
+                 init: bool = True,
                  name='QRQNetwork',
                  trainable=True,
                  dtype=tf.float32):
@@ -33,7 +34,8 @@ class C51QNetwork(Network):
                         'activation': activation,
                         'noisy_layers': noisy_layers,
                         'dueling': dueling,
-                        'n_atoms': n_atoms}
+                        'n_atoms': n_atoms,
+                        'init': init}
         self._encoder = EncodingNetwork(
             state_shape,
             conv_params=conv_params,
@@ -46,7 +48,7 @@ class C51QNetwork(Network):
         self._q_layer = QLayer(action_shape, units=fc_params[-1], dropout=dropout_params, dueling=dueling,
                                noisy_layers=noisy_layers, n=n_atoms)
         self._support = support
-        if support is not None:  # loading model
+        if support is not None and init:  # loading model
             self(tf.ones((1, *state_shape)))
 
     @property

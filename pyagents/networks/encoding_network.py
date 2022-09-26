@@ -16,6 +16,7 @@ class EncodingNetwork(Network):
                  activation='tanh',
                  noisy_layers=False,
                  dtype: str = 'float32',
+                 init: bool = True,
                  name='EncodingNetwork',
                  conv_type='2d'):
         super().__init__(name=name, dtype=dtype)
@@ -27,6 +28,7 @@ class EncodingNetwork(Network):
                         'dropout_params': dropout_params if dropout_params else tuple(),
                         'activation': activation,
                         'name': name,
+                        'init': init,
                         'noisi_layers': noisy_layers,
                         'dtype': dtype,
                         'conv_type': conv_type}
@@ -87,7 +89,8 @@ class EncodingNetwork(Network):
                     layers.append(tf.keras.layers.Dropout(rate=dropout))
 
         self._postprocessing_layers = layers
-        self(tf.ones((1, *state_shape)))
+        if init:
+            self(tf.ones((1, *state_shape)))
 
     def call(self, inputs, training=False, mask=None):
         states = inputs

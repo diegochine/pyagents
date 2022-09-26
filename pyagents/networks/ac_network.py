@@ -17,6 +17,7 @@ class ACNetwork(Network):
                  pi_params: dict,
                  q_params: dict,
                  pi_out='gaussian',
+                 init: bool = True,
                  name='ACNetwork',
                  trainable=True,
                  dtype: str = 'float32'):
@@ -32,10 +33,12 @@ class ACNetwork(Network):
                                          action_shape=action_shape,
                                          output=pi_out,
                                          **pi_params,
+                                         init=init,
                                          dtype=dtype)
         self._critic_net = QNetwork(state_shape=state_shape,
                                     action_shape=action_shape,
                                     **q_params,
+                                    init=init,
                                     dtype=dtype)
 
     @property

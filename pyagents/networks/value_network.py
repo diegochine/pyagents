@@ -16,6 +16,7 @@ class ValueNetwork(Network):
                  fc_params=(64, 64),
                  dropout_params=None,
                  activation: str = 'tanh',
+                 init: bool = True,
                  name: str = 'ValueNetwork',
                  trainable: bool = True,
                  dtype: str = 'float32'):
@@ -26,6 +27,7 @@ class ValueNetwork(Network):
                         'dropout_params': dropout_params if dropout_params else [],
                         'activation': activation,
                         'name': name,
+                        'init': init,
                         'dtype': dtype}
         if conv_params is None and fc_params is None:
             self._encoder = None
@@ -42,7 +44,8 @@ class ValueNetwork(Network):
                                                  kernel_initializer=tf.keras.initializers.Orthogonal(1.0),
                                                  dtype=dtype)
         self._denormalizer = None
-        self(tf.ones((1, *state_shape)))
+        if init:
+            self(tf.ones((1, *state_shape)))
 
     def get_config(self):
         config = super().get_config()

@@ -20,6 +20,7 @@ class QRQNetwork(Network):
                  dueling=True,
                  noisy_layers=False,
                  activation='relu',
+                 init: bool = True,
                  name='QRQNetwork',
                  trainable=True,
                  dtype=tf.float32):
@@ -32,7 +33,8 @@ class QRQNetwork(Network):
                         'activation': activation,
                         'noisy_layers': noisy_layers,
                         'dueling': dueling,
-                        'n_quantiles': n_quantiles}
+                        'n_quantiles': n_quantiles,
+                        'init': init}
         self._encoder = EncodingNetwork(
             state_shape,
             conv_params=conv_params,
@@ -44,7 +46,8 @@ class QRQNetwork(Network):
         )
         self._q_layer = QLayer(action_shape, units=fc_params[-1], dropout=dropout_params, dueling=dueling,
                                noisy_layers=noisy_layers, n=n_quantiles)
-        self(tf.ones((1, *state_shape)))
+        if init:
+            self(tf.ones((1, *state_shape)))
 
     @property
     def noisy_layers(self):
