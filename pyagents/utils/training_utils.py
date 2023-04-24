@@ -12,7 +12,6 @@ from tqdm import tqdm
 
 import pyagents.agents as agents
 import pyagents.networks as networks
-from pyagents.utils.obs_wrapper import ObservationWrapper
 
 
 @gin.configurable
@@ -385,10 +384,6 @@ def get_envs(n_envs, gym_id, seed, capture_video, output_dir, frame_stack=1, asy
                     os.mkdir(f"{output_dir}/videos")
                 env = gym.wrappers.RecordVideo(env, f"{output_dir}/videos",
                                                episode_trigger=lambda e: (e % record_every) == 5)
-
-            if gym_id.startswith('Viz'):
-                env = ObservationWrapper(env)
-                env = gym.wrappers.TransformReward(env, lambda r: rew_fn(r))
 
             if frame_stack > 1:
                 env = gym.wrappers.FrameStack(env, num_stack=frame_stack)

@@ -9,13 +9,10 @@ import gin
 
 from pyagents.utils.training_utils import test_agent, get_agent, load_agent, get_envs
 
-if __name__ == "__main__":
-    import warnings
-    warnings.filterwarnings('ignore', category=DeprecationWarning)
-
+def get_args():
     parser = ArgumentParser(description="Script for training a sample agent on Gym")
     parser.add_argument('-a', '--agent', type=str, help='which agent to use, either DQN, VPG, A2C or DDPG')
-    parser.add_argument('-c', '--config-dir', type=str, default='', help='path to dir containing gin config file')
+    parser.add_argument('-c', '--cfg-file', type=str, default='', help='path to gin config file')
     parser.add_argument('-tv', '--test-ver', type=int, default=None,
                         help='if -1, use final version; if >=0, performs evaluation using this version')
     parser.add_argument('-e', '--env', type=str, default='cartpole',
@@ -31,61 +28,59 @@ if __name__ == "__main__":
                         help='number of testing environments')
     parser.add_argument('--video', action=argparse.BooleanOptionalAction, default=False,
                         help='number of parallel envs for vectorized environment')
+
     args = parser.parse_args()
     args.env = args.env.lower()
+
     if args.env.startswith('a'):
-        gym_id = 'Acrobot-v1'
+        args.gym_id = 'Acrobot-v1'
     elif args.env.startswith('bi'):
-        gym_id = 'BipedalWalker-v3'
+        args.gym_id = 'BipedalWalker-v3'
     elif args.env.startswith('br'):
-        gym_id = 'ALE/Breakout-ram'
+        args.gym_id = 'ALE/Breakout-ram'
     elif args.env.startswith('c'):
-        gym_id = 'CartPole-v1'
+        args.gym_id = 'CartPole-v1'
     elif args.env.startswith('l'):
-        gym_id = 'LunarLander-v2'
+        args.gym_id = 'LunarLander-v2'
     elif args.env.startswith('m'):
-        gym_id = 'MountainCar-v0'
+        args.gym_id = 'MountainCar-v0'
     elif args.env.startswith('p'):
-        gym_id = 'Pendulum-v1'
+        args.gym_id = 'Pendulum-v1'
     elif args.env.startswith('wa'):
-        gym_id = 'Walker2d-v2'
+        args.gym_id = 'Walker2d-v2'
     elif args.env.startswith('ha'):
-        gym_id = 'HalfCheetah-v3'
-    elif args.env.startswith('viz'):
-        import vizdoom.gym_wrapper
-        if 'l' in args.env:  # line
-            gym_id = 'VizdoomDefendLine-v0'
-        elif 'h' in args.env:  # health
-            gym_id = 'VizdoomHealthGathering-v0'
-        elif 'c' in args.env:  # center
-            gym_id = 'VizdoomDefendCenter-v0'
-        else:
-            raise ValueError(f'unrecognized vizdoom scenario {args.env}')
-        # ['VizdoomBasic-v0', 'VizdoomCorridor-v0', 'VizdoomDefendCenter-v0', 'VizdoomDefendLine-v0',
-        # 'VizdoomHealthGathering-v0', 'VizdoomMyWayHome-v0', 'VizdoomPredictPosition-v0', 'VizdoomTakeCover-v0',
-        # 'VizdoomDeathmatch-v0', 'VizdoomHealthGatheringSupreme-v0']
+        args.gym_id = 'HalfCheetah-v3'
     else:
         raise ValueError(f'unsupported env {args.env}')
 
     if not args.output_dir:
-        args.output_dir = f'output/{args.agent}-{gym_id.replace("/", "-")}'
+        if not os.path.isdir('output'):
+            os.makedirs('output')
+        args.output_dir = f'output/{args.agent}-{args.gym_id.replace("/", "-")}'
+
+    return args
+
+
+if __name__ == "__main__":
+    import warnings
+    warnings.filterwarnings('ignore', category=DeprecationWarning)
+
+    args = get_args()
 
     if args.test_ver is not None:
         agent = load_agent(args.agent, args.output_dir, args.test_ver)
-        envs = get_envs(n_envs=args.test_envs, seed=args.seed, gym_id=gym_id,
+        envs = get_envs(n_envs=args.test_envs, seed=args.seed, gym_id=args.gym_id,
                         capture_video=args.video, output_dir=args.output_dir, no_vect=True)
-        scores = test_agent(agent, envs, render=True, seed=args.seed, n_episodes=100)
+        scores = test_agent(agent, envs, seed=args.seed, n_episodes=100)
         avg_score = np.mean(scores)
         print(f'AVG SCORE: {avg_score:4.0f}')
         exit()
 
-    listdir = sorted(os.listdir(args.config_dir))
-    for cfg_file in listdir:
-        gin.parse_config_file(os.path.join(args.config_dir, cfg_file))
-        out_dir = f'{args.output_dir}_{cfg_file.split(".")[0]}'
-        train_envs = get_envs(n_envs=args.num_envs, seed=args.seed, gym_id=gym_id,
-                              capture_video=args.video, output_dir=out_dir)
-        test_envs = get_envs(n_envs=args.test_envs, seed=args.seed, gym_id=gym_id,
-                             capture_video=args.video, output_dir=out_dir)
-        agent = get_agent(args.agent, train_envs, output_dir=out_dir, gym_id=gym_id)
-        agent, scores = train_agent(agent, train_envs, test_envs, seed=args.seed, output_dir=out_dir)
+    if args.cfg_file:
+        gin.parse_config_file(args.cfg_file)
+    train_envs = get_envs(n_envs=args.num_envs, seed=args.seed, gym_id=args.gym_id,
+                          capture_video=args.video, output_dir=args.output_dir)
+    test_envs = get_envs(n_envs=args.test_envs, seed=args.seed, gym_id=args.gym_id,
+                         capture_video=args.video, output_dir=args.output_dir)
+    agent = get_agent(args.agent, train_envs, output_dir=args.output_dir, gym_id=args.gym_id)
+    agent, scores = train_agent(agent, train_envs, test_envs, seed=args.seed, output_dir=args.output_dir)
