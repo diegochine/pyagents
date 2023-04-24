@@ -20,5 +20,15 @@ setup(
         "Operating System :: OS Independent",
     ],
     packages=find_packages('.'),
-    python_requires=">=3.6",
+    install_requires=[
+        'numpy',
+        'tensorflow>=2.10',
+        'tensorflow-probability',
+        'gymnasium',
+        'tqdm',
+        'gin-config',
+        'h5py',
+        'wandb',
+    ],
+    python_requires=">=3.7",
 )
