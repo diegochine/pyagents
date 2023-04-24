@@ -1,0 +1,28 @@
+get_agent.buffer = 'uniform'
+get_agent.act_start_learning_rate = 2e-3
+get_agent.schedule = True
+get_agent.training_steps = 100000
+
+train_agent.training_steps = 100000
+train_agent.rollout_steps = 256
+train_agent.test_every = 500
+train_agent.update_rounds = 128
+train_agent.batch_size = 64
+train_agent.init_params = {"min_memories": 1000}
+
+QRDQNAgent.gamma = 0.99
+QRDQNAgent.ddqn = True
+QRDQNAgent.epsilon = 1.0
+QRDQNAgent.epsilon_decay = 0.999
+QRDQNAgent.target_update_period = 10
+QRDQNAgent.tau = 0.95
+
+QRQNetwork.fc_params = (256, 256)
+QRQNetwork.dropout_params = 0.1
+QRQNetwork.noisy_layers = False
+QRQNetwork.n_quantiles = 10
+
+UniformBuffer.n_step_return = 3
+PrioritizedBuffer.n_step_return = 3
+
+get_agent.wandb_params = {'key': 'bb91b382cc121df7e109ec0ad0275f1accc4c2f4', 'project': 'test', 'entity': 'mazelions', 'tags': ['qrdqn']}
