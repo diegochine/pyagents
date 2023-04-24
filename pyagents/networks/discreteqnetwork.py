@@ -51,8 +51,7 @@ class DiscreteQNetwork(Network):
                                dropout=dropout_params,
                                dueling=dueling,
                                noisy_layers=noisy_layers,
-                               dtype=dtype,
-                               do_init=do_init)
+                               dtype=dtype)
         if do_init:
             self(tf.ones((1, *state_shape)))
 
