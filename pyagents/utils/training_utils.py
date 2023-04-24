@@ -2,7 +2,7 @@ import os
 import random
 from collections import defaultdict
 
-import gym
+import gymnasium as gym
 import numpy as np
 import tensorflow as tf
 import gin
@@ -161,20 +161,17 @@ def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
         for _ in range(rollout_steps):
             agent_out = agent.act(s_t)
             a_t, lp_t = agent_out.actions, agent_out.logprobs
-            s_tp1, r_t, done, info = envs.step(a_t)
-            for i, single_step in enumerate(info):
-                # handle TimeLimit wrapper
-                if 'TimeLimit.truncated' in single_step:
-                    done[i] = not single_step['TimeLimit.truncated']
-                if "episode" in single_step:
-                    train_info['avg_return'].append(single_step['episode']['r'])
+            s_tp1, r_t, terminated, truncated, info = envs.step(a_t)
+            if 'final_info' in info:
+                for single_step in filter(lambda x: x is not None, info['final_info']):
+                    train_info['avg_ret'].append(single_step['episode']['r'])
                     train_info['avg_len'].append(single_step['episode']['l'])
 
             agent.remember(state=s_t,
                            action=a_t,
                            reward=r_t,
                            next_state=s_tp1,
-                           done=done,
+                           done=terminated,
                            logprob=lp_t)
             s_t = s_tp1
 
@@ -192,20 +189,17 @@ def train_off_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
         for _ in range(rollout_steps):
             agent_out = agent.act(s_t)
             a_t, lp_t = agent_out.actions, agent_out.logprobs
-            s_tp1, r_t, done, info = envs.step(a_t)
-            for i, single_step in enumerate(info):
-                # handle TimeLimit wrapper
-                if 'TimeLimit.truncated' in single_step:
-                    done[i] = not single_step['TimeLimit.truncated']
-                if "episode" in single_step:
-                    train_info['avg_return'].append(single_step['episode']['r'])
+            s_tp1, r_t, terminated, truncated, info = envs.step(a_t)
+            if 'final_info' in info:
+                for single_step in filter(lambda x: x is not None, info['final_info']):
+                    train_info['avg_ret'].append(single_step['episode']['r'])
                     train_info['avg_len'].append(single_step['episode']['l'])
 
             agent.remember(state=s_t,
                            action=a_t,
                            reward=r_t,
                            next_state=s_tp1,
-                           done=done,
+                           done=terminated,
                            logprob=lp_t)
             s_t = s_tp1
 
@@ -239,11 +233,12 @@ def train_agent(agent, train_envs, test_env=None, train_step_fn=None, training_s
 
     training_step = 0
     best_score = float('-inf')
-    k = 1
-    avg_r, avg_l = None, None
+    ver = 1
     episodes = 0
-    scores = test_agent(agent, test_env, seed=seed, n_episodes=test_rounds, render=False)
-    wandb.log({'train_step': 0, 'test/score': np.mean(scores)})
+    scores = test_agent(agent, test_env, seed=seed, n_episodes=test_rounds)
+    if agent.is_logging:
+        wandb.log({'train_step': 0, 'test/score': np.mean(scores)})
+    info = dict(avg_ret=np.mean(scores), avg_len=0)
     print(f'{"*" * 42}\nSTARTING TRAINING\n{"*" * 42}')
     with tqdm(total=training_steps) as pbar:
         pbar.set_description('INITIALIZING')
@@ -263,74 +258,69 @@ def train_agent(agent, train_envs, test_env=None, train_step_fn=None, training_s
                                                        update_rounds=update_rounds)
             agent.init(train_envs, env_config=env_config, **init_params)
 
-        state = train_envs.reset() #seed=seed
+        state, new_info = train_envs.reset() #seed=seed
+        info.update(new_info)
+
         if not unique_seed:
             seed = ((seed ** 2) + 33) // 2  # generate new random seed for testing, pretty arbitrary here
         pbar.set_description('TRAINING')
         while training_step <= training_steps:
-            state, info = train_step_fn(agent, train_envs, s_t=state)
+            state, new_info = train_step_fn(agent, train_envs, s_t=state)
             training_step += update_rounds
+            info.update(new_info)
 
-            if test_env is not None and training_step > k * test_every:
+            if test_env is not None and training_step > ver * test_every:
                 pbar.set_description('TESTING')
-                scores = test_agent(agent, test_env, seed=seed, n_episodes=test_rounds, render=False)
+                scores = test_agent(agent, test_env, seed=seed, n_episodes=test_rounds)
                 avg_score = np.mean(scores)
                 if avg_score > best_score:
                     best_score = avg_score
-                    agent.save(ver=k)
-                k += 1
+                    agent.save(ver=ver)
+                ver += 1
                 info['test/score'] = avg_score
                 pbar.set_description(f'[EVAL SCORE: {avg_score:4.0f}] TRAINING')
 
             if agent.is_logging:
-                if 'avg_return' in info:
-                    for avg_r, avg_l in zip(info.pop('avg_return'), info.pop('avg_len')):
-                        wandb.log({'episode': episodes, 'avg_return': avg_r, 'avg_len': avg_l})
-                        episodes += 1
-                wandb.log(info)  # this logging adds some useless keys to info
-                del info['_timestamp']
-                del info['_runtime']
+                info['avg_ret'] = np.mean(info['avg_ret'])
+                info['avg_len'] = np.mean(info['avg_len'])
+                wandb.log(info)
 
             pbar.update(update_rounds)
-            pbar.set_postfix(**info, avg_r=avg_r, avg_l=avg_l)
+            pbar.set_postfix(**info)
 
     agent.save(ver=0)
     return agent, scores
 
 
-def test_agent(agent, envs, seed, n_episodes, render=False):
+def test_agent(agent, envs, seed, n_episodes):
     def no_vec_test(env, s_t):
         score, episode = 0, 0
         s_t = tf.expand_dims(s_t, axis=0)
         a_t = agent.act(s_t, training=False).actions[0]
-        s_tp1, _, done, info = env.step(a_t)
-        if done:
-            s_tp1 = envs.reset()
+        s_tp1, _, terminated, truncated, info = env.step(a_t)
         if "episode" in info.keys():
             score = [info['episode']['r']]
             episode = 1
+        if terminated:
+            s_tp1, info = envs.reset()
         return score, episode, s_tp1
 
     def vec_test(envs, s_t):
         episodes = 0
         scores = []
         a_t = agent.act(s_t, training=False).actions
-        s_tp1, _, _, info = envs.step(a_t)
-        for single_step in info:
-            if "episode" in single_step.keys():
+        s_tp1, _, _, _, info = envs.step(a_t)
+        if 'final_info' in info:
+            for single_step in filter(lambda x: x is not None, info['final_info']):
                 scores.append(single_step['episode']['r'])
                 episodes += 1
         return scores, episodes, s_tp1
 
     scores = []
     episode = 0
-    s_t = envs.reset()# seed=seed
+    s_t, info = envs.reset(seed=seed)
     test_step_fn = vec_test if isinstance(envs, gym.vector.VectorEnv) else no_vec_test
     while episode < n_episodes:
-        if render:
-            envs.render()
-            import time
-            time.sleep(0.05)
         step_scores, step_episodes, s_t = test_step_fn(envs, s_t)
         if step_episodes > 0:
             episode += step_episodes
@@ -371,13 +361,7 @@ def get_envs(n_envs, gym_id, seed, capture_video, output_dir, frame_stack=1, asy
         def thunk():
             if not os.path.isdir(output_dir):
                 os.mkdir(output_dir)
-            env_args = dict()
-            if gym_id.startswith('ALE'):
-                env_args = dict(full_action_space=False,  # reduced action space for easier learning
-                                )
-            if gym_id.startswith('Viz'):
-                env_args = dict(frame_skip=4)
-            env = gym.make(gym_id, **env_args)
+            env = gym.make(gym_id, render_mode='human' if capture_video else None)
 
             if capture_video and idx == 0:
                 if not os.path.isdir(f"{output_dir}/videos"):
@@ -387,11 +371,7 @@ def get_envs(n_envs, gym_id, seed, capture_video, output_dir, frame_stack=1, asy
 
             if frame_stack > 1:
                 env = gym.wrappers.FrameStack(env, num_stack=frame_stack)
-            # env = gym.wrappers.TimeLimit(env)
             env = gym.wrappers.RecordEpisodeStatistics(env)
-            #env.seed(seed)
-            #env.action_space.seed(seed)
-            #env.observation_space.seed(seed)
             return env
 
         return thunk
