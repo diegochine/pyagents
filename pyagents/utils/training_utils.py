@@ -244,7 +244,8 @@ def train_agent(agent, train_envs, test_env=None, train_step_fn=None, training_s
     avg_r, avg_l = None, None
     episodes = 0
     scores = test_agent(agent, test_env, seed=seed, n_episodes=test_rounds, render=False)
-    wandb.log({'train_step': 0, 'test/score': np.mean(scores)})
+    if agent.is_logging:
+        wandb.log({'train_step': 0, 'test/score': np.mean(scores)})
     print(f'{"*" * 42}\nSTARTING TRAINING\n{"*" * 42}')
     with tqdm(total=training_steps) as pbar:
         pbar.set_description('INITIALIZING')
