@@ -135,7 +135,7 @@ class QRDQNAgent(DQNAgent):
             actions = tf.one_hot(target_out.actions, self.action_shape, on_value=True, off_value=False)
         next_quantiles = target_out.dist_params[actions]
 
-        target_quantiles = reward_batch + (1. - done_batch) * self._gamma * tf.stop_gradient(next_quantiles)
+        target_quantiles = reward_batch + (1. - done_batch) * self._gamma_n * tf.stop_gradient(next_quantiles)
         # compute td errors for each pair of (theta_i(x), theta_j(x')) quantiles
         current_quantiles = tf.tile(tf.expand_dims(current_quantiles, -1), [1, 1, self._n])
         target_quantiles = tf.tile(tf.expand_dims(target_quantiles, -2), [1, self._n, 1])
