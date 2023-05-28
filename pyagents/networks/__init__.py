@@ -8,3 +8,5 @@ from pyagents.networks.ac_network import ACNetwork
 from pyagents.networks.shared_backbone_ac_network import SharedBackboneACNetwork
 from pyagents.networks.c51_qnetwork import C51QNetwork
 from pyagents.networks.qr_qnetwork import QRQNetwork
+from pyagents.networks.iqn_network import IQNetwork
+

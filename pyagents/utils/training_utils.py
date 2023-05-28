@@ -22,7 +22,8 @@ def get_optimizer(learning_rate=0.001):
 
 @gin.configurable
 def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='uniform',
-              crit_start_learning_rate=None, alpha_start_learning_rate=None, schedule=True, wandb_params=None, gym_id=None, training_steps=10 ** 5,
+              crit_start_learning_rate=None, alpha_start_learning_rate=None, schedule=True, wandb_params=None,
+              gym_id=None, training_steps=10 ** 5,
               log_dict=None):
     if log_dict is None:
         log_dict = dict()
@@ -35,7 +36,8 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
     if schedule:
         act_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(act_start_learning_rate, training_steps, 0.)
         crit_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(crit_start_learning_rate, training_steps, 0.)
-        alpha_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(alpha_start_learning_rate, training_steps, 0.)
+        alpha_learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(alpha_start_learning_rate, training_steps,
+                                                                            0.)
     else:
         act_learning_rate = act_start_learning_rate
         crit_learning_rate = crit_start_learning_rate
@@ -62,7 +64,7 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
 
     if algo in ('vpg', 'ppo'):
         if isinstance(action_space, gym.spaces.Discrete):
-            action_shape = (action_shape, )
+            action_shape = (action_shape,)
         a_net = networks.PolicyNetwork(state_shape, action_shape, output=output, bounds=bounds)
         v_net = networks.ValueNetwork(state_shape)
         a_opt = get_optimizer(learning_rate=act_learning_rate)
@@ -98,16 +100,16 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
     elif algo == 'c51':
         assert isinstance(action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
         action_shape = action_space.n
-        log_dict['learning_rate'] = act_start_learning_rate
+        log_dict['learning_rate'] = act_learning_rate
         q_net = networks.C51QNetwork(state_shape, action_shape)
-        optim = Adam(learning_rate=act_learning_rate)
+        optim = get_optimizer(act_learning_rate)
         agent = agents.C51DQNAgent(state_shape, action_shape, q_net, buffer=buffer, optimizer=optim,
                                    name='c51', wandb_params=wandb_params, save_dir=output_dir,
                                    log_dict=log_dict)
     elif algo == 'qrdqn':
         assert isinstance(action_space, gym.spaces.Discrete), 'DQN only works in discrete environments'
         action_shape = action_space.n
-        log_dict['learning_rate'] = act_start_learning_rate
+        log_dict['learning_rate'] = act_learning_rate
         q_net = networks.QRQNetwork(state_shape, action_shape)
         optim = Adam(learning_rate=act_learning_rate, epsilon=0.01 / 32)
         agent = agents.QRDQNAgent(state_shape, action_shape, q_net, buffer=buffer, optimizer=optim,
@@ -151,12 +153,21 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
                            log_dict={'actor_learning_rate': act_start_learning_rate,
                                      'critic_learning_rate': crit_start_learning_rate,
                                      'alpha_learning_rate': alpha_start_learning_rate})
+    elif algo == 'iqn':
+        assert isinstance(action_space, gym.spaces.Discrete), 'IQN only works in discrete spaces'
+        action_shape = action_space.n
+        log_dict['learning_rate'] = act_start_learning_rate
+        q_net = networks.IQNetwork(state_shape, action_shape)
+        optim = get_optimizer(act_start_learning_rate)
+        agent = agents.IQNAgent(state_shape, action_shape, q_net, buffer=buffer, optimizer=optim,
+                                name='iqn', wandb_params=wandb_params, save_dir=output_dir,
+                                log_dict=log_dict)
     else:
         raise ValueError(f'unsupported algorithm {algo}')
     return agent
 
 
-def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
+def get_train_step_fn(batch_size=128, rollout_steps=100, update_rounds=1):
     def train_step(agent, envs, s_t):
         train_info = defaultdict(lambda: list())
         for _ in range(rollout_steps):
@@ -179,7 +190,16 @@ def train_on_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
                            logprob=lp_t)
             s_t = s_tp1
 
-        loss_dict = agent.train(batch_size, update_rounds=update_rounds)
+        # training
+        if agent.on_policy:
+            loss_dict = agent.train(batch_size, update_rounds=update_rounds)
+        else:
+            loss_dict = defaultdict(lambda: 0)  # keeps track of average losses
+            for _ in range(update_rounds):
+                epoch_info = agent.train(batch_size)
+                for loss, value in epoch_info.items():
+                    loss_dict[loss] += (value / update_rounds)
+
         train_info['train_step'] = agent.train_step
         train_info = {**train_info, **loss_dict}
         return s_t, train_info
@@ -252,20 +272,17 @@ def train_agent(agent, train_envs, test_env=None, train_step_fn=None, training_s
         env_config = dict(batch_size=batch_size, rollout_steps=rollout_steps, num_envs=train_envs.num_envs,
                           update_rounds=update_rounds, training_steps=training_steps)
 
+        if train_step_fn is None:
+            train_step_fn = get_train_step_fn(batch_size=batch_size,
+                                              rollout_steps=rollout_steps,
+                                              update_rounds=update_rounds)
+
         if agent.on_policy:
-            if train_step_fn is None:
-                train_step_fn = train_on_policy_agent(batch_size=batch_size,
-                                                      rollout_steps=rollout_steps,
-                                                      update_rounds=update_rounds)
             agent.init(train_envs, rollout_steps, env_config=env_config, **init_params)
         else:
-            if train_step_fn is None:
-                train_step_fn = train_off_policy_agent(batch_size=batch_size,
-                                                       rollout_steps=rollout_steps,
-                                                       update_rounds=update_rounds)
             agent.init(train_envs, env_config=env_config, **init_params)
 
-        state = train_envs.reset() #seed=seed
+        state = train_envs.reset()  # seed=seed
         if not unique_seed:
             seed = ((seed ** 2) + 33) // 2  # generate new random seed for testing, pretty arbitrary here
         pbar.set_description('TRAINING')
@@ -326,7 +343,7 @@ def test_agent(agent, envs, seed, n_episodes, render=False):
 
     scores = []
     episode = 0
-    s_t = envs.reset()# seed=seed
+    s_t = envs.reset()  # seed=seed
     test_step_fn = vec_test if isinstance(envs, gym.vector.VectorEnv) else no_vec_test
     while episode < n_episodes:
         if render:
@@ -395,12 +412,13 @@ def get_envs(n_envs, gym_id, seed, capture_video, output_dir, frame_stack=1, asy
                 env = gym.wrappers.FrameStack(env, num_stack=frame_stack)
             # env = gym.wrappers.TimeLimit(env)
             env = gym.wrappers.RecordEpisodeStatistics(env)
-            #env.seed(seed)
-            #env.action_space.seed(seed)
-            #env.observation_space.seed(seed)
+            # env.seed(seed)
+            # env.action_space.seed(seed)
+            # env.observation_space.seed(seed)
             return env
 
         return thunk
+
     if no_vect:
         envs = make_env(gym_id, seed, 0, capture_video, output_dir)()
     else:

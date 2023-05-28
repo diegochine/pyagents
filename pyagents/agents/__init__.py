@@ -2,6 +2,7 @@ from pyagents.agents.agent import Agent
 from pyagents.agents.dqn import DQNAgent
 from pyagents.agents.c51_dqn import C51DQNAgent
 from pyagents.agents.qr_dqn import QRDQNAgent
+from pyagents.agents.iqn import IQNAgent
 from pyagents.agents.vpg import VPG
 from pyagents.agents.a2c import A2C
 from pyagents.agents.ddpg import DDPG
