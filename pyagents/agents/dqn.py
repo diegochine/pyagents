@@ -146,7 +146,7 @@ class DQNAgent(OffPolicyAgent):
         else:
             # standard dqn target
             bootstrap_values = tf.math.reduce_max(next_target_q_values, axis=1)
-        bootstrap_rews = tf.stop_gradient(reward_batch + self._gamma_n * bootstrap_values)
+        bootstrap_rews = tf.stop_gradient(reward_batch + (1. - done_batch) * self._gamma_n * bootstrap_values)
 
         target_q_values = tf.where(done_batch, reward_batch, bootstrap_rews)
         # loss function reduces last axis, so we reshape to add a dummy one

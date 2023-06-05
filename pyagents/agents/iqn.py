@@ -11,7 +11,7 @@ from copy import deepcopy
 
 @gin.configurable
 class IQNAgent(DQNAgent):
-    """An agent implementing a DQN algorithm based on the QR-DQN algorithm (https://arxiv.org/pdf/1710.10044.pdf).
+    """An agent implementing the IQN algorithm (https://arxiv.org/pdf/1806.06923.pdf).
        Only supports Discrete action spaces."""
 
     def __init__(self,
@@ -56,7 +56,7 @@ class IQNAgent(DQNAgent):
               from online network. Defaults to 500.
             tau: (Optional) tau for polyak-averaging of target network update. Defaults to 1.0.
             kappa: (Optional) kappa of huber loss (either 0.0 or 1.0). Defaults to 1.0.
-            n_samples: (Optional) number of iid sampled used to estimate the loss.
+            n_samples: (Optional) number of iid samples used to estimate the return distribution.
             ddqn: (Optional) if True, uses Double DQN loss. Defaults to True.
             buffer: (Optional) buffer to store memories. Defaults to a uniform buffer.
             normalize_obs: (Optional) if True, keeps track of running statistics to normalize observations.
