@@ -22,6 +22,7 @@ DiscreteQNetwork.fc_params = (64, 64)
 DiscreteQNetwork.dropout_params = 0.1
 DiscreteQNetwork.noisy_layers = False
 
+UniformBuffer.n_step_return = 3
 PrioritizedBuffer.n_step_return = 3
 
 #get_agent.wandb_params = {'key': 'bb91b382cc121df7e109ec0ad0275f1accc4c2f4', 'project': 'test', 'entity': 'mazelions', 'tags': ['dqn']}

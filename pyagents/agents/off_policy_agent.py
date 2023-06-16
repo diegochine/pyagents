@@ -47,7 +47,6 @@ class OffPolicyAgent(Agent, ABC):
         self._gamma_n = tf.constant(gamma ** self._memory.n_step_return, dtype=self.dtype)
         self._config.update({'gamma': gamma})
 
-
     @property
     def on_policy(self):
         return False
@@ -60,21 +59,18 @@ class OffPolicyAgent(Agent, ABC):
         super().init(envs, env_config=env_config, *args, **kwargs)
         if min_memories is None:
             min_memories = self._memory.get_config()['size']
-        s_t = envs.reset()
+        s_t, _ = envs.reset()
         for _ in range(min_memories // self.num_envs):
             if actions is not None:
                 a_t = np.random.choice(actions, 1)
             else:
                 a_t = envs.action_space.sample()
-            s_tp1, r_t, done, info = envs.step(a_t)
-            for i, single_step in enumerate(info):
-                # handle TimeLimit wrapper
-                if 'TimeLimit.truncated' in single_step:
-                    done[i] = not info[i]['TimeLimit.truncated']
-            self.remember(s_t, a_t, r_t, s_tp1, done)
+            s_tp1, r_t, terminated, truncated, info = envs.step(a_t)
+            self.remember(s_t, a_t, r_t, s_tp1, terminated)
             s_t = s_tp1
 
-    def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool, *args, **kwargs) -> None:
+    def remember(self, state: np.ndarray, action, reward: float, next_state: np.ndarray, done: bool, *args,
+                 **kwargs) -> None:
         """Saves piece of memory."""
         reward = reward * self.reward_scaling
         self._memory.commit_stmemory((state, action, reward, next_state, done), gamma=self._gamma)
