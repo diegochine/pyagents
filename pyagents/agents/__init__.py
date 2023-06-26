@@ -8,6 +8,7 @@ from pyagents.agents.a2c import A2C
 from pyagents.agents.ddpg import DDPG
 from pyagents.agents.ppo import PPO
 from pyagents.agents.sac import SAC
+from pyagents.agents.sac_lag import SACLag
 from pyagents.agents.off_policy_agent import OffPolicyAgent
 
 

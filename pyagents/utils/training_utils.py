@@ -20,7 +20,7 @@ def get_optimizer(learning_rate=0.001):
 
 
 @gin.configurable
-def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='uniform',
+def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='uniform', lambda_learning_rate=None,
               crit_start_learning_rate=None, alpha_start_learning_rate=None, schedule=True, wandb_params=None,
               gym_id=None, training_steps=10 ** 5,
               log_dict=None):
@@ -62,7 +62,7 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
 
     if algo in ('vpg', 'ppo'):
         if isinstance(action_space, gym.spaces.Discrete):
-            action_shape = (action_shape, )
+            action_shape = (action_shape,)
         a_net = networks.PolicyNetwork(state_shape, action_shape, output=output, bounds=bounds)
         v_net = networks.ValueNetwork(state_shape)
         a_opt = get_optimizer(learning_rate=act_learning_rate)
@@ -160,12 +160,33 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
         agent = agents.IQNAgent(state_shape, action_shape, q_net, buffer=buffer, optimizer=optim,
                                 name='iqn', wandb_params=wandb_params, save_dir=output_dir,
                                 log_dict=log_dict)
+    elif algo == 'saclag':
+        assert 'Safety' in gym_id, 'Using constrained RL algo for unconstrained environment'
+        assert isinstance(action_space, gym.spaces.Box), 'sac only works in continuous spaces'
+        action_shape = action_space.shape
+        bounds = (action_space.low, action_space.high)
+
+        a_net = networks.PolicyNetwork(state_shape, action_shape, output='gaussian', bounds=bounds,
+                                       activation='relu', out_params={'state_dependent_std': True,
+                                                                      'mean_activation': None})
+        q_nets = networks.ExtendedQNetwork(state_shape=state_shape, action_shape=action_shape, reward_shape=(2,))
+        a_opt = get_optimizer(learning_rate=act_learning_rate)
+        c_opt = get_optimizer(learning_rate=crit_learning_rate)
+        alpha_opt = get_optimizer(learning_rate=alpha_learning_rate)
+        lambda_opt = get_optimizer(learning_rate=lambda_learning_rate)
+
+        agent = agents.SACLag(state_shape, action_shape, actor=a_net, buffer=buffer,
+                              critics=q_nets, actor_opt=a_opt, critic_opt=c_opt,
+                              alpha_opt=alpha_opt, wandb_params=wandb_params, save_dir=output_dir,
+                              log_dict={'actor_learning_rate': act_start_learning_rate,
+                                        'critic_learning_rate': crit_start_learning_rate,
+                                        'alpha_learning_rate': alpha_start_learning_rate})
     else:
         raise ValueError(f'unsupported algorithm {algo}')
     return agent
 
 
-def get_train_step_fn(batch_size=128, rollout_steps=100, update_rounds=1):
+def get_train_step_fn(batch_size=128, rollout_steps=100, update_rounds=1, safe_rl=False):
     def train_step(agent, envs, s_t):
         train_info = defaultdict(lambda: list())
         for _ in range(rollout_steps):
@@ -202,39 +223,6 @@ def get_train_step_fn(batch_size=128, rollout_steps=100, update_rounds=1):
     return train_step
 
 
-def train_off_policy_agent(batch_size=128, rollout_steps=100, update_rounds=1):
-    def train_step(agent, envs, s_t):
-        train_info = defaultdict(lambda: list())
-        for _ in range(rollout_steps):
-            agent_out = agent.act(s_t)
-            a_t, lp_t = agent_out.actions, agent_out.logprobs
-            s_tp1, r_t, terminated, truncated, info = envs.step(a_t)
-            if 'final_info' in info:
-                for single_step in filter(lambda x: x is not None, info['final_info']):
-                    train_info['avg_ret'].append(single_step['episode']['r'])
-                    train_info['avg_len'].append(single_step['episode']['l'])
-
-            agent.remember(state=s_t,
-                           action=a_t,
-                           reward=r_t,
-                           next_state=s_tp1,
-                           done=terminated,
-                           logprob=lp_t)
-            s_t = s_tp1
-
-        loss_dict = defaultdict(lambda: 0)  # keeps track of average losses
-        for _ in range(update_rounds):
-            epoch_info = agent.train(batch_size)
-            for loss, value in epoch_info.items():
-                loss_dict[loss] += (value / update_rounds)
-
-        train_info['train_step'] = agent.train_step
-        train_info = {**train_info, **loss_dict}
-        return s_t, train_info
-
-    return train_step
-
-
 @gin.configurable
 def train_agent(agent, train_envs, test_env=None, train_step_fn=None, training_steps=10 ** 5, batch_size=64,
                 update_rounds=1,
@@ -253,7 +241,6 @@ def train_agent(agent, train_envs, test_env=None, train_step_fn=None, training_s
     training_step = 0
     best_score = float('-inf')
     ver = 1
-    episodes = 0
     scores = test_agent(agent, test_env, seed=seed, n_episodes=test_rounds)
     if agent.is_logging:
         wandb.log({'train_step': 0, 'test/score': np.mean(scores)})
@@ -272,13 +259,9 @@ def train_agent(agent, train_envs, test_env=None, train_step_fn=None, training_s
         if agent.on_policy:
             agent.init(train_envs, rollout_steps, env_config=env_config, **init_params)
         else:
-            if train_step_fn is None:
-                train_step_fn = train_off_policy_agent(batch_size=batch_size,
-                                                       rollout_steps=rollout_steps,
-                                                       update_rounds=update_rounds)
             agent.init(train_envs, env_config=env_config, **init_params)
 
-        state, new_info = train_envs.reset() #seed=seed
+        state, new_info = train_envs.reset()
         info.update(new_info)
 
         if not unique_seed:
@@ -392,9 +375,6 @@ def get_envs(n_envs, gym_id, seed, capture_video, output_dir, frame_stack=1, asy
             if frame_stack > 1:
                 env = gym.wrappers.FrameStack(env, num_stack=frame_stack)
             env = gym.wrappers.RecordEpisodeStatistics(env)
-            # env.seed(seed)
-            # env.action_space.seed(seed)
-            # env.observation_space.seed(seed)
             return env
 
         return thunk

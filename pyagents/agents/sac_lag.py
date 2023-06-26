@@ -6,7 +6,7 @@ import tensorflow as tf
 import wandb
 from tensorflow.keras.optimizers import Adam
 
-from pyagents.agents import OffPolicyAgent
+from pyagents.agents.off_policy_agent import OffPolicyAgent
 from pyagents.agents.agent import update_target
 from pyagents.memory import Buffer, load_memories
 from pyagents.networks import PolicyNetwork, QNetwork
@@ -132,19 +132,30 @@ class SACLag(OffPolicyAgent):
             self._wandb_run.config.update(env_config)
         if min_memories is None:
             min_memories = self._memory.get_config()['size']
-        s_t = envs.reset().reshape(1, -1)
+        s_t, _ = envs.reset()
         for _ in range(min_memories // self.num_envs):
             a_t = envs.action_space.sample()
-            s_tp1, r_t, done, info = envs.step(a_t)
-            r_t = np.array([[r_t, info['constraint_violation']]])
-            s_tp1 = s_tp1.reshape(1, -1)
-            # feasible_action = envs.rescale(info['action'], to_network_range=True).reshape(1, -1)
-            self.remember(state=s_t,
-                          action=a_t.reshape(1, -1),
-                          reward=r_t,
-                          next_state=s_tp1,
-                          done=[done])
-            s_t = envs.reset().reshape(1, -1) if done else s_tp1
+            s_tp1, r_t, terminated, truncated, info = envs.step(a_t)
+            if 'final_info' in info:
+                assert 'cost' not in info, 'issue with ending states on vector env'  # TODO check if it works
+                envs_over = np.logical_or(terminated, truncated).reshape(-1, 1)
+                s_tp1_with_final = np.where(envs_over, np.stack(info['final_observation']), s_tp1)
+                info = info['final_info'][envs_over]
+                all_costs = [info['final_info'][i].get('cost', 0.0) for i in range(self.num_envs)]
+                r_t = np.stack([r_t, all_costs], axis=1)
+                self.remember(state=s_t,
+                              action=a_t,
+                              reward=r_t,
+                              next_state=s_tp1_with_final,
+                              done=terminated)
+            else:
+                r_t = np.stack([r_t, info['cost']], axis=1)
+                self.remember(state=s_t,
+                              action=a_t,
+                              reward=r_t,
+                              next_state=s_tp1,
+                              done=terminated)
+            s_t = s_tp1
 
     @property
     def alpha_actor(self):
