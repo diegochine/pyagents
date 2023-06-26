@@ -1,11 +1,12 @@
 import gin
-import tensorflow as tf
+import torch
+import torch.nn as nn
 
 from pyagents.layers.noisynet import NoisyLayer
 
 
 @gin.configurable
-class QLayer(tf.keras.layers.Layer):
+class QLayer(nn.Module):
 
     def __init__(self,
                  action_shape,
@@ -27,18 +28,18 @@ class QLayer(tf.keras.layers.Layer):
         if noisy_layers:
             fc_layer = NoisyLayer
         else:
-            fc_layer = tf.keras.layers.Dense
+            fc_layer = nn.Linear
         self.noisy_layers = noisy_layers
         self.action_shape = action_shape
         self.dueling = dueling
         self.dropout = bool(dropout is not None)
-        final_initializer = tf.random_uniform_initializer(-0.003, 0.003)
+        final_initializer = nn.init.uniform_(-0.003, 0.003)
         if self.dueling:
             self._value_fc = fc_layer(units, activation='relu')
             if self.dropout:
                 self._value_dropout = tf.keras.layers.Dropout(rate=dropout)
             self._value_head = fc_layer(n, activation=None, kernel_initializer=final_initializer)
-            self._adv_fc = fc_layer(units, activation='relu' )
+            self._adv_fc = fc_layer(units, activation='relu')
             if self.dropout:
                 self._adv_dropout = tf.keras.layers.Dropout(rate=dropout)
             self._adv_head = fc_layer(n * action_shape, activation=None, kernel_initializer=final_initializer)

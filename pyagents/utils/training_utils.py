@@ -4,10 +4,9 @@ from collections import defaultdict
 
 import gymnasium as gym
 import numpy as np
-import tensorflow as tf
+import torch.optim as optim
 import gin
 import wandb
-from tensorflow.keras.optimizers import Adam
 from tqdm import tqdm
 
 import pyagents.agents as agents
@@ -15,13 +14,13 @@ import pyagents.networks as networks
 
 
 @gin.configurable
-def get_optimizer(learning_rate=0.001):
-    return Adam(learning_rate=learning_rate)
+def get_optimizer(params, learning_rate=0.001):
+    return optim.Adam(params, lr=learning_rate)
 
 
 @gin.configurable
 def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='uniform',
-              crit_start_learning_rate=None, alpha_start_learning_rate=None, schedule=True, wandb_params=None, gym_id=None, training_steps=10 ** 5,
+              crit_start_learning_rate=None, alpha_start_learning_rate=None, schedule=False, wandb_params=None, gym_id=None, training_steps=10 ** 5,
               log_dict=None):
     if log_dict is None:
         log_dict = dict()
@@ -90,8 +89,8 @@ def get_agent(algo, env, output_dir, act_start_learning_rate=3e-4, buffer='unifo
         action_shape = action_space.n
         log_dict['learning_rate'] = act_start_learning_rate
         q_net = networks.DiscreteQNetwork(state_shape, action_shape)
-        optim = Adam(learning_rate=act_learning_rate)
-        agent = agents.DQNAgent(state_shape, action_shape, q_network=q_net, buffer=buffer, optimizer=optim,
+        opt = get_optimizer(params=q_net.parameters(), learning_rate=act_learning_rate)
+        agent = agents.DQNAgent(state_shape, action_shape, q_network=q_net, buffer=buffer, optimizer=opt,
                                 name='dqn', wandb_params=wandb_params, save_dir=output_dir,
                                 log_dict=log_dict)
     elif algo == 'c51':

@@ -1,6 +1,7 @@
 import gin
 import numpy as np
-import tensorflow as tf
+import torch
+import torch.nn as nn
 from pyagents.networks.network import Network
 from pyagents.layers.noisynet import NoisyLayer
 
@@ -29,7 +30,7 @@ class EncodingNetwork(Network):
                         'activation': activation,
                         'name': name,
                         'do_init': do_init,
-                        'noisi_layers': noisy_layers,
+                        'noisy_layers': noisy_layers,
                         'dtype': dtype,
                         'conv_type': conv_type}
 
@@ -40,9 +41,9 @@ class EncodingNetwork(Network):
 
         if conv_params:
             if conv_type == '2d':
-                conv_layer_type = tf.keras.layers.Conv2D
+                conv_layer_type = nn.Conv2d
             elif conv_type == '1d':
-                conv_layer_type = tf.keras.layers.Conv1D
+                conv_layer_type = nn.Conv1d
             else:
                 raise ValueError(f'unsupported conv type {conv_type}. Use "1d" or "2d"')
 
@@ -54,12 +55,11 @@ class EncodingNetwork(Network):
                     dilation_rate = (1, 1) if conv_type == '2d' else (1,)
                 else:
                     raise ValueError('only 3 or 4 elements permitted in conv_params tuples')
-                layers.append(conv_layer_type(filters=filters,
+                layers.append(conv_layer_type(out_channels=filters,
                                               kernel_size=kernel_size,
-                                              strides=strides,
-                                              dilation_rate=dilation_rate,
+                                              stride=strides,
+                                              dilation=dilation_rate,
                                               activation=activation,
-                                              kernel_initializer=kernel_initializer,
                                               dtype=dtype))
 
         layers.append(tf.keras.layers.Flatten())
@@ -90,9 +90,9 @@ class EncodingNetwork(Network):
 
         self._postprocessing_layers = layers
         if do_init:
-            self(tf.ones((1, *state_shape)))
+            self(torch.ones((1, *state_shape)))
 
-    def call(self, inputs, training=False, mask=None):
+    def forward(self, inputs, training=False, mask=None):
         states = inputs
         for layer in self._postprocessing_layers:
             states = layer(states, training=training)

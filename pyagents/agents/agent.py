@@ -5,7 +5,6 @@ from typing import Optional, List, Dict
 
 import h5py
 import numpy as np
-import tensorflow as tf
 import wandb
 
 from pyagents.policies import Policy
@@ -19,7 +18,7 @@ def update_target(source_vars, target_vars, tau=1.0):
         tv.assign((1 - tau) * tv + tau * sv)
 
 
-class Agent(tf.Module, abc.ABC):
+class Agent(abc.ABC):
     """Abstract base class for all implemented agents.
     The agent serves two purposes:
     * Training by reading minibatches of memories (either from a buffer or an internal memory),

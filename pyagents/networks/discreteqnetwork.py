@@ -1,6 +1,6 @@
 import gin
 import numpy as np
-import tensorflow as tf
+import torch
 
 from pyagents.layers.qlayer import QLayer
 from pyagents.networks.network import Network, NetworkOutput
@@ -53,7 +53,7 @@ class DiscreteQNetwork(Network):
                                noisy_layers=noisy_layers,
                                dtype=dtype)
         if do_init:
-            self(tf.ones((1, *state_shape)))
+            self(torch.ones((1, *state_shape)))
 
     @property
     def noisy_layers(self):
@@ -64,12 +64,12 @@ class DiscreteQNetwork(Network):
         self._encoder.reset_noise()
         self._q_layer.reset_noise()
 
-    def call(self, inputs, training=False, mask=None):
+    def forward(self, inputs, training=False, mask=None):
         state = self._encoder(inputs, training=training)
         qvals = self._q_layer(state, training=training)
         if mask is not None:
-            qvals = tf.where(mask, qvals, np.NINF)
-        action = tf.argmax(qvals, axis=1)
+            qvals = torch.where(mask, qvals, np.NINF)
+        action = torch.argmax(qvals, dim=1)
         return NetworkOutput(critic_values=qvals, actions=action)
 
     def get_config(self):

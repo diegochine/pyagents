@@ -3,7 +3,6 @@ from abc import ABC
 from typing import Optional
 
 import numpy as np
-import tensorflow as tf
 
 from pyagents.agents import Agent
 from pyagents.memory import Buffer, UniformBuffer, PrioritizedBuffer
@@ -44,7 +43,7 @@ class OffPolicyAgent(Agent, ABC):
 
         self._gamma = gamma
         # take into account eventual n_step returns
-        self._gamma_n = tf.constant(gamma ** self._memory.n_step_return, dtype=self.dtype)
+        self._gamma_n = gamma ** self._memory.n_step_return
         self._config.update({'gamma': gamma})
 
     @property
