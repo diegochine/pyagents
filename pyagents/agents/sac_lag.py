@@ -141,7 +141,7 @@ class SACLag(OffPolicyAgent):
                 envs_over = np.logical_or(terminated, truncated).reshape(-1, 1)
                 s_tp1_with_final = np.where(envs_over, np.stack(info['final_observation']), s_tp1)
                 info = info['final_info'][envs_over]
-                all_costs = [info['final_info'][i].get('cost', 0.0) for i in range(self.num_envs)]
+                all_costs = [info['final_info'][i].get('constraint_violation', 0.0) for i in range(self.num_envs)]
                 r_t = np.stack([r_t, all_costs], axis=1)
                 self.remember(state=s_t,
                               action=a_t,
