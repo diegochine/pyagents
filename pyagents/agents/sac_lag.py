@@ -149,7 +149,7 @@ class SACLag(OffPolicyAgent):
                               next_state=s_tp1_with_final,
                               done=terminated)
             else:
-                r_t = np.stack([r_t, info['cost']], axis=1)
+                r_t = np.stack([r_t, info['constraint_violation']], axis=1)
                 self.remember(state=s_t,
                               action=a_t,
                               reward=r_t,
