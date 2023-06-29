@@ -275,7 +275,7 @@ class SACLag(OffPolicyAgent):
                     - tf.exp(self._log_alpha) * (tf.stop_gradient(logprobs + self.target_entropy)))
                 alpha_grads_and_vars, alpha_norm = self._apply_gradients(alpha_loss, self._alpha_opt,
                                                                          [self._log_alpha], alpha_tape)
-                loss_dict[f'loss_alpha'] = alpha_loss
+                loss_dict[f'loss_alpha'] = float(alpha_loss)
                 alpha_grads_log = {f'alpha/{".".join(var.name.split("/"))}': grad.numpy()
                                    for grad, var in alpha_grads_and_vars}
                 alpha_grads_log[f'alpha/norm'] = alpha_norm
@@ -288,7 +288,7 @@ class SACLag(OffPolicyAgent):
                 lambda_loss = tf.math.softplus(self._lambda_weight) * tf.reduce_mean(rewards[..., 1])
             lambda_grads_and_vars, lambda_norm = self._apply_gradients(lambda_loss, self._lambda_opt,
                                                                        [self._lambda_weight], lambda_tape)
-            loss_dict['lambda_loss'] = lambda_loss
+            loss_dict['lambda_loss'] = float(lambda_loss)
             lambda_grads_log = {f'lambda/{".".join(var.name.split("/"))}': grad.numpy()
                                 for grad, var in lambda_grads_and_vars}
             lambda_grads_log[f'lambda/norm'] = lambda_norm
