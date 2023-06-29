@@ -33,9 +33,6 @@ class EncodingNetwork(Network):
                         'dtype': dtype,
                         'conv_type': conv_type}
 
-        # TODO improve inizialization, allow initizializer to be passed as parameter
-        kernel_initializer = tf.keras.initializers.Orthogonal(0.1)
-
         layers = []
 
         if conv_params:
@@ -59,7 +56,7 @@ class EncodingNetwork(Network):
                                               strides=strides,
                                               dilation_rate=dilation_rate,
                                               activation=activation,
-                                              kernel_initializer=kernel_initializer,
+                                              kernel_initializer=tf.keras.initializers.Orthogonal(0.1),
                                               dtype=dtype))
 
         layers.append(tf.keras.layers.Flatten())
@@ -82,7 +79,7 @@ class EncodingNetwork(Network):
                 layers.append(fc_layer(
                     units=num_units,
                     activation=activation,
-                    kernel_initializer=kernel_initializer,
+                    kernel_initializer=tf.keras.initializers.Orthogonal(0.1),
                     kernel_regularizer=kernel_regularizer,
                     dtype=dtype))
                 if dropout is not None:
