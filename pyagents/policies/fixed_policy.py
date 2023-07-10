@@ -25,7 +25,7 @@ class FixedPolicy(Policy):
         return self._bounds
 
     def _act(self, obs, **kwargs):
-        action = self._policy_network(obs, **kwargs).action
+        action = self._policy_network(obs, **kwargs).actions
         if self._bounds is not None:
             action = np.clip(action, self._bounds[0], self._bounds[1])
         return PolicyOutput(actions=action)
