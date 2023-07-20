@@ -12,9 +12,13 @@ class GaussianLayer(tf.keras.layers.Layer):
         self._deterministic = deterministic
         self._state_dependent_std = state_dependent_std
         # determine parameters for rescaling
-        lb, ub = bounds
-        self._act_means = tf.constant((ub + lb) / 2.0, shape=action_shape, dtype=dtype)
-        self._act_magnitudes = tf.constant((ub - lb) / 2.0, shape=action_shape, dtype=dtype)
+        if bounds is not None:
+            lb, ub = bounds
+            self._act_means = tf.constant((ub + lb) / 2.0, shape=action_shape, dtype=dtype)
+            self._act_magnitudes = tf.constant((ub - lb) / 2.0, shape=action_shape, dtype=dtype)
+        else:
+            self._act_means = None
+            self._act_magnitudes = None
         self._mean_layer = tf.keras.layers.Dense(action_shape[0],  # assumes 1d action space
                                                  kernel_initializer=tf.keras.initializers.Orthogonal(0.01),
                                                  activation=mean_activation)
@@ -54,7 +58,8 @@ class GaussianLayer(tf.keras.layers.Layer):
             log_probs = action_distribution.log_prob(action)
 
         # action rescaling into bounds
-        action = self._act_means + self._act_magnitudes * action
+        if self._act_means is not None and self._act_magnitudes is not None:
+            action = self._act_means + self._act_magnitudes * action
 
         # if not training or self._deterministic:
         #     action = mean
