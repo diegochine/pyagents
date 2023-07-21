@@ -47,7 +47,8 @@ class SACLag(OffPolicyAgent):
                  name: str = 'SACSE',
                  save_dir: str = './output',
                  wandb_params: Optional[dict] = None,
-                 dtype: str = 'float32'):
+                 dtype: str = 'float32',
+                 **kwargs):
         super().__init__(state_shape,
                          action_shape,
                          training,
@@ -58,7 +59,8 @@ class SACLag(OffPolicyAgent):
                          save_dir,
                          save_memories,
                          name,
-                         dtype)
+                         dtype,
+                         **kwargs)
 
         if (actor_opt is None or critic_opt is None) and training:
             raise ValueError('agent cannot be trained without optimizers')
@@ -75,13 +77,13 @@ class SACLag(OffPolicyAgent):
         self.train_alpha = train_alpha
         self._log_alpha = tf.Variable(initial_value=tf.math.log(initial_alpha), trainable=True)
         self._alpha_opt = alpha_opt
-        if self.train_alpha and self._alpha_opt is None and self._actor_opt is not None:
+        if self.train_alpha and self._alpha_opt is None:
             self._alpha_opt = Adam(learning_rate=self._actor_opt.learning_rate)
 
         self._lambda_weight = tf.Variable(initial_value=tf.math.log(tf.math.exp(initial_lambda) - 1.), trainable=True)
         self.train_lambda = train_lambda
         self._lambda_opt = lambda_opt
-        if self.train_lambda and self._lambda_opt is None and self._actor_opt is not None:
+        if self.train_lambda and self._lambda_opt is None:
             self._lambda_opt = Adam(learning_rate=self._actor_opt.learning_rate)
 
         self._policy = self._actor.get_policy()

@@ -41,7 +41,8 @@ class Agent(tf.Module, abc.ABC):
                  save_memories: bool = False,
                  log_gradients: bool = False,
                  name: str = 'Agent',
-                 dtype: str = 'float32'):
+                 dtype: str = 'float32',
+                 **kwargs):
         """Creates an Agent.
 
         Args:
@@ -50,7 +51,7 @@ class Agent(tf.Module, abc.ABC):
             training: (Optional) If True, agent is in training phase. Defaults to True.
             name: (Optional) Name of the agent.
         """
-        super(Agent, self).__init__(name=name)
+        super(Agent, self).__init__(name=name, **kwargs)
         self._state_shape = state_shape
         self._action_shape = action_shape
         self._training = training

@@ -21,7 +21,8 @@ class OnPolicyAgent(Agent, ABC):
                  save_dir: str = './output',
                  save_memories: bool = False,
                  name='OffPolicyAgent',
-                 dtype: str = 'float32'):
+                 dtype: str = 'float32',
+                 **kwargs):
         super(OnPolicyAgent, self).__init__(state_shape,
                                             action_shape,
                                             training,
@@ -30,7 +31,8 @@ class OnPolicyAgent(Agent, ABC):
                                             save_dir=save_dir,
                                             save_memories=save_memories,
                                             name=name,
-                                            dtype=dtype)
+                                            dtype=dtype,
+                                            **kwargs)
         self._config.update({'lam_gae': lam_gae})
         self._memory = {k: None for k in self.MEMORY_KEYS}  # keeps track of current trajectories
         self._rollout_size = None  # size of above container, #steps * #envs

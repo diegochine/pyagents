@@ -81,7 +81,8 @@ class DQNAgent(OffPolicyAgent):
                                        buffer=buffer,
                                        save_dir=save_dir,
                                        name=name,
-                                       dtype=dtype)
+                                       dtype=dtype,
+                                       **kwargs)
         if optimizer is None and training:
             raise ValueError('agent cannot be trained without optimizer')
         # assert isinstance(action_shape, int), 'current implementation only supports 1D discrete action spaces'

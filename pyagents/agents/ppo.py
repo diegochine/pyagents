@@ -36,7 +36,8 @@ class PPO(OnPolicyAgent):
                  log_dict: dict = None,
                  name: str = 'PPO',
                  wandb_params: Optional[dict] = None,
-                 dtype: str = 'float32'):
+                 dtype: str = 'float32',
+                 **kwargs):
         """Creates an PPO agent.
 
                 Args:
@@ -67,7 +68,7 @@ class PPO(OnPolicyAgent):
                 """
         super(PPO, self).__init__(state_shape, action_shape, lam_gae=lam_gae, normalize_obs=normalize_obs,
                                   reward_scaling=reward_scaling, training=training, save_dir=save_dir, name=name,
-                                  dtype=dtype)
+                                  dtype=dtype, **kwargs)
         if actor_opt is None and training:
             raise ValueError('agent cannot be trained without optimizer')
 

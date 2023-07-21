@@ -35,7 +35,8 @@ class DDPG(OffPolicyAgent):
                  save_memories: bool = False,
                  name: str = 'DDPG',
                  wandb_params: Optional[dict] = None,
-                 dtype: str = 'float32'):
+                 dtype: str = 'float32',
+                 **kwargs):
         """Creates a DDPG agent.
 
         Args:
@@ -60,7 +61,8 @@ class DDPG(OffPolicyAgent):
                                    save_dir=save_dir,
                                    save_memories=save_memories,
                                    name=name,
-                                   dtype=dtype)
+                                   dtype=dtype,
+                                   **kwargs)
         if (actor_opt is None or critic_opt is None) and training:
             raise ValueError('agent cannot be trained without optimizers')
         self._ac = actor_critic

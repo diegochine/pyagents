@@ -21,7 +21,8 @@ class OffPolicyAgent(Agent, ABC):
                  save_dir: str = './output',
                  save_memories: bool = False,
                  name='OffPolicyAgent',
-                 dtype: str = 'float32'):
+                 dtype: str = 'float32',
+                 **kwargs):
         super(OffPolicyAgent, self).__init__(state_shape,
                                              action_shape,
                                              training,
@@ -30,7 +31,8 @@ class OffPolicyAgent(Agent, ABC):
                                              save_dir=save_dir,
                                              save_memories=save_memories,
                                              name=name,
-                                             dtype=dtype)
+                                             dtype=dtype,
+                                             **kwargs)
         if isinstance(buffer, Buffer):
             buffer.set_save_dir(self._save_dir)
             self._memory: Buffer = buffer

@@ -34,7 +34,8 @@ class VPG(OnPolicyAgent):
                  log_dict: dict = None,
                  name: str = 'VPG',
                  wandb_params: Optional[dict] = None,
-                 dtype: str = 'float32'):
+                 dtype: str = 'float32',
+                 **kwargs):
         """Creates a VPG agent.
 
                 Args:
@@ -63,7 +64,7 @@ class VPG(OnPolicyAgent):
                 """
         super(VPG, self).__init__(state_shape, action_shape, lam_gae=lam_gae,
                                   training=training, save_dir=save_dir, name=name,
-                                  dtype=dtype)
+                                  dtype=dtype, **kwargs)
         if actor_opt is None and training:
             raise ValueError('agent cannot be trained without optimizer')
 
